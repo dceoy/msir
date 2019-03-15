@@ -1,0 +1,21 @@
+---
+version: '3'
+
+services:
+  msir:
+    container_name: msir
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dceoy/msir:latest
+    user: ${UID}:${GID}
+    userns_mode: host
+    ports:
+      - 8888:8888
+    volumes:
+      - ${PWD}:/wd
+    working_dir: /wd
+    entrypoint:
+      - msr
+    command:
+      - --help
