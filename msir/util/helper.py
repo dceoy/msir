@@ -8,7 +8,7 @@ import subprocess
 import traceback
 
 
-def validate_files_and_dirs(files=list(), dirs=list()):
+def validate_files_and_dirs(files=[], dirs=[]):
     if files:
         file_nf = [f for f in files if not os.path.isfile(fetch_abspath(f))]
         if file_nf:

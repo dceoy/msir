@@ -29,14 +29,17 @@ class SamDataFrame(BaseBioDataFrame):
         self.__detected_col_dtypes = {}
         self.header = []
 
-    def load(self):
+    def load(self, add_view_args=[]):
         if self.path.endswith('.sam'):
             with open(self.path, 'r') as f:
                 for s in f:
                     self._load_sam_line(string=s)
         else:
             th_args = (['-@', str(self.__n_th)] if self.__n_th > 1 else [])
-            args = [self.__samtools, 'view', *th_args, '-h', self.path]
+            args = [
+                self.__samtools, 'view', *th_args, '-h', self.path,
+                *add_view_args
+            ]
             for s in self.run_and_parse_subprocess(args=args):
                 self._load_sam_line(string=s)
         self.df = self.df.reset_index(drop=True)

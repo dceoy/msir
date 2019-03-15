@@ -3,8 +3,8 @@
 Tandem repeat analyzer for microsatellite instability detection by DNA-seq
 
 Usage:
-    msir extract [--debug] [--bed=<path>] [--out-dir=<path>]
-                 [--samtools=<path>] [--tsv] [--processes=<int>] <sam>...
+    msir extract [--debug] [--bed=<path>] [--out-dir=<path>] [--index-bam]
+                 [--samtools=<path>] [--tsv] [--processes=<int>] <bam>...
     msir -h|--help
     msir -v|--version
 
@@ -14,21 +14,23 @@ Options:
     --debug             Execute a command with debug messages
     --bed=<path>        Pass an input BED file [default: msir.bed]
     --out-dir=<path>    Pass an output directory [default: .]
+    --index-bam         Index BAM or CRAM files if required
     --samtools=<path>   Pass a path to samtools command
     --tsv               Write results into TSV files (CSV is the default)
     --processes=<int>   Limit max cores for multiprocessing
 
 Arguments:
-    <sam>               Path to an input SAM/BAM/CRAM file
+    <bam>               Path to an input BAM/CRAM file
 
 Commands:
     extract             Extract tandem repeats in reads
 """
 
 import logging
+import os
 from docopt import docopt
 from .. import __version__
-from ..call.tandemrepeat import extract_tandem_repeats_in_sams
+from ..call.tandemrepeat import extract_tandem_repeats_in_bams
 
 
 def main():
@@ -41,10 +43,11 @@ def main():
             else (logging.INFO if args['--info'] else logging.WARNING)
         )
     )
-    logging.debug('args:\n{}'.format(args))
+    logging.debug('args:{0}{1}'.format(os.linesep, args))
     if args['extract']:
-        extract_tandem_repeats_in_sams(
-            sam_paths=args['<sam>'], bed_path=args['--bed'],
+        extract_tandem_repeats_in_bams(
+            bam_paths=args['<bam>'], bed_path=args['--bed'],
             out_dir_path=args['--out-dir'], output_tsv=args['--tsv'],
-            samtools=args['--samtools'], processes=args['--processes']
+            index_bam=args['--index-bam'], samtools=args['--samtools'],
+            processes=args['--processes']
         )
