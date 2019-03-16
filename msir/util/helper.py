@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
-from concurrent.futures import as_completed
+import bz2
+import gzip
 import logging
 import os
-from pprint import pformat
 import subprocess
-import traceback
+from Bio import SeqIO
 
 
 def validate_files_and_dirs(files=[], dirs=[]):
@@ -28,16 +28,28 @@ def fetch_abspath(path):
 
 
 def fetch_executable(cmd):
-    """Fetch an executable command path
-    Args:
-        cmd (str): command name
-    """
     executables = [
         cp for cp in [
             os.path.join(p, cmd) for p in str.split(os.environ['PATH'], ':')
         ] if os.access(cp, os.X_OK)
     ]
     return executables[0] if executables else None
+
+
+def print_log(message, prompt='msir >>'):
+    print('{0}\t{1}'.format(prompt, message), flush=True)
+
+
+def read_fasta(fa_path):
+    if fa_path.endswith('.gz'):
+        f = gzip.open(fa_path, 'r')
+    elif fa_path.endswith('.bz2'):
+        f = bz2.open(fa_path, 'r')
+    else:
+        f = open(fa_path, 'r')
+    records = SeqIO.to_dict(SeqIO.parse(f, 'fasta'))
+    f.close()
+    return records
 
 
 def run_and_parse_subprocess(args, stdout=subprocess.PIPE,
@@ -47,9 +59,7 @@ def run_and_parse_subprocess(args, stdout=subprocess.PIPE,
         for line in p.stdout:
             yield line.decode('utf-8')
         outs, errs = p.communicate()
-        if p.returncode == 0:
-            pass
-        else:
+        if p.returncode != 0:
             logger = logging.getLogger(__name__)
             logger.error(
                 'STDERR from subprocess `{0}`:{1}{2}'.format(
@@ -59,26 +69,3 @@ def run_and_parse_subprocess(args, stdout=subprocess.PIPE,
             raise subprocess.CalledProcessError(
                 returncode=p.returncode, cmd=p.args, output=outs, stderr=errs
             )
-
-
-def wait_futures(futures, ignore_error=False, timeout=604800):
-    logger = logging.getLogger(__name__)
-    future_results = []
-    for f in as_completed(futures):
-        try:
-            res = f.result(timeout=timeout)
-        except Exception as e:
-            logger.error(os.linesep + traceback.format_exc())
-            if ignore_error:
-                logger.debug('Ignore a future error.')
-            else:
-                canceled_fs = [f for f in futures if f.cancel()]
-                if canceled_fs:
-                    logger.debug('Canceled futures: {}'.format(canceled_fs))
-                raise e
-        else:
-            logger.info('Complete a future: {0} => {1}'.format(f, res))
-            future_results.append(res)
-        finally:
-            logger.debug('finished future:' + os.linesep + pformat(vars(f)))
-    logger.debug('future_results: {}'.format(future_results))

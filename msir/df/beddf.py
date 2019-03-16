@@ -45,9 +45,10 @@ class BedDataFrame(BaseBioDataFrame):
                     for k in self.__detected_cols
                 }
             self.df = self.df.append(
-                pd.read_table(
+                pd.read_csv(
                     io.StringIO(string), header=None,
                     names=self.__detected_cols,
                     dtype=self.__detected_col_dtypes
-                )
+                ),
+                sep='\t'
             )
