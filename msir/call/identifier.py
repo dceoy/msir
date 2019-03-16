@@ -11,9 +11,9 @@ from ..util.helper import fetch_abspath, print_log, read_fasta, \
     validate_files_and_dirs
 
 
-def scan_repeat_units_on_bed(bed_path, genome_fa_path, ru_tsv_path,
-                             max_unit_len=6, min_rep_times=3, ex_region_len=10,
-                             n_proc=8):
+def identify_repeat_units_on_bed(bed_path, genome_fa_path, ru_tsv_path,
+                                 max_unit_len=6, min_rep_times=3,
+                                 ex_region_len=10, n_proc=8):
     logger = logging.getLogger(__name__)
     validate_files_and_dirs(files=[bed_path, genome_fa_path])
     print_log('Identify repeat units.')

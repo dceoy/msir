@@ -42,7 +42,7 @@ from multiprocessing import cpu_count
 import os
 from docopt import docopt
 from .. import __version__
-from ..call.identifier import scan_repeat_units_on_bed
+from ..call.identifier import identify_repeat_units_on_bed
 from ..call.scanner import scan_tandem_repeats_in_reads
 
 
@@ -68,7 +68,7 @@ def main():
             cut_end_len=args['--cut-end-len'], n_proc=n_proc
         )
     elif args['id']:
-        scan_repeat_units_on_bed(
+        identify_repeat_units_on_bed(
             bed_path=args['--bed'], genome_fa_path=args['--genome-fa'],
             ru_tsv_path=args['--unit-tsv'],
             max_unit_len=int(args['--max-unit-len']),
