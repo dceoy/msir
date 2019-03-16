@@ -12,6 +12,14 @@ test:
         name: Validate the codes using flake8
         code: |
           find . -name '*.py' | xargs flake8
+    - script:
+        name: Test a command
+        code: |
+          msir --version
+    - script:
+        name: Run unittests
+        code: |
+          python ./test/test.py -v
   after-steps:
     - slack-notifier:
         url: $SLACK_URL

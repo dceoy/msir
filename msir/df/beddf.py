@@ -48,7 +48,6 @@ class BedDataFrame(BaseBioDataFrame):
                 pd.read_csv(
                     io.StringIO(string), header=None,
                     names=self.__detected_cols,
-                    dtype=self.__detected_col_dtypes
-                ),
-                sep='\t'
+                    dtype=self.__detected_col_dtypes, sep='\t'
+                )
             )

@@ -5,7 +5,7 @@ Tandem repeat analyzer for microsatellite instability detection by DNA-seq
 Usage:
     msir id [--debug] [--max-unit-len=<int>] [--min-rep-times=<int>]
             [--ex-region-len=<int>] [--processes=<int>] [--unit-tsv=<path>]
-            --bed=<path> --genome-fa=<path>
+            <bed> <fasta>
     msir count [--debug] [--unit-tsv=<path>] [--out-dir=<path>] [--index-bam]
                [--samtools=<path>] [--cut-end-len=<int>] [--csv]
                [--processes=<int>] <bam>...
@@ -16,13 +16,11 @@ Options:
     -h, --help              Print help and exit
     -v, --version           Print version and exit
     --debug                 Execute a command with debug messages
-    --max-unit-len=<int>    Set a maximum length for repeat units [default: 6]
+    --max-unit-len=<int>    Set a maximum length for repeat units [default: 10]
     --min-rep-times=<int>   Set a minimum repeat times [default: 3]
-    --ex-region-len=<int>   Search around extra regions [default: 10]
+    --ex-region-len=<int>   Search around extra regions [default: 0]
     --processes=<int>       Limit max cores for multiprocessing
     --unit-tsv=<path>       Set a TSV file of repeat units [default: ru.tsv]
-    --bed=<path>            Pass a BED file of repetitive regions
-    --genome-fa=<path>      Pass a reference genome fasta file
     --out-dir=<path>        Pass an output directory [default: .]
     --index-bam             Index BAM or CRAM files if required
     --samtools=<path>       Set a path to samtools command
@@ -30,6 +28,8 @@ Options:
     --csv                   Write results with CSV instead of TSV
 
 Arguments:
+    <bed>                   Path to a BED file of repetitive regions
+    <fasta>                 Path to a reference genome fasta file
     <bam>                   Path to an input BAM/CRAM file
 
 Commands:
@@ -69,10 +69,10 @@ def main():
         )
     elif args['id']:
         identify_repeat_units_on_bed(
-            bed_path=args['--bed'], genome_fa_path=args['--genome-fa'],
+            bed_path=args['<bed>'], genome_fa_path=args['<fasta>'],
             ru_tsv_path=args['--unit-tsv'],
             max_unit_len=int(args['--max-unit-len']),
             min_rep_times=int(args['--min-rep-times']),
-            ex_region_len=int(args['-ex-region-len']),
+            ex_region_len=int(args['--ex-region-len']),
             n_proc=n_proc
         )

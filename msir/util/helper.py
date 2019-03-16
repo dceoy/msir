@@ -36,8 +36,14 @@ def fetch_executable(cmd):
     return executables[0] if executables else None
 
 
-def print_log(message, prompt='msir >>'):
+def print_log(message, prompt='>>>'):
     print('{0}\t{1}'.format(prompt, message), flush=True)
+
+
+def fetch_bed_region_str(**kwargs):
+    return '{0}:{1}-{2}'.format(*[
+        kwargs.get(k) for k in ['chrom', 'chromStart', 'chromEnd']
+    ])
 
 
 def read_fasta(fa_path):

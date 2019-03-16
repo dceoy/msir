@@ -5,7 +5,6 @@ import logging
 import os
 import subprocess
 import pandas as pd
-from ..util.error import MsirError
 from ..util.helper import fetch_executable, print_log, run_and_parse_subprocess
 
 
@@ -14,7 +13,7 @@ def validate_or_prepare_bam_indexes(bam_paths, index_bam=False, n_proc=8,
     logger = logging.getLogger(__name__)
     invalid_exts = [p for p in bam_paths if not p.endswith(('.bam', '.cram'))]
     if invalid_exts:
-        raise MsirError('invalid BAM/CRAM paths: {}'.format(invalid_exts))
+        raise RuntimeError('invalid BAM/CRAM paths: {}'.format(invalid_exts))
     else:
         bai_paths = {
             p: (p + '.bai' if p.endswith('.bam') else p + '.crai')
@@ -33,7 +32,7 @@ def validate_or_prepare_bam_indexes(bam_paths, index_bam=False, n_proc=8,
                 logger.debug('args: {}'.format(args))
                 subprocess.run(args=args, check=True)
         else:
-            raise MsirError(
+            raise FileNotFoundError(
                 'BAM/CRAM indexes not found: {}'.format(
                     list(bam_paths_without_bai)
                 )
