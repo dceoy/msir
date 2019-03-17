@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from collections import OrderedDict
 from concurrent.futures import as_completed, ProcessPoolExecutor
 from itertools import chain, product
 import logging
@@ -40,87 +41,92 @@ def identify_repeat_units_on_bed(bed_path, genome_fa_path, ru_tsv_path,
     )
     logger.debug('df_search:{0}{1}'.format(os.linesep, df_search))
     fa_seqs = None
-    df_ru = pd.DataFrame()
     print_log('Identify repeat units on BED regions:')
+    regex_dict = _make_str_regex_dict(
+        max_unit_len=max_unit_len, min_rep_times=min_rep_times
+    )
+    logger.debug('len(regex_dict): {}'.format(len(regex_dict)))
+    df_ru_list = []
     with ProcessPoolExecutor(max_workers=n_proc) as x:
         fs = [
             x.submit(
-                _identify_repeat_unit, line, id, max_unit_len, min_rep_times
+                _identify_repeat_unit, line, id, regex_dict, max_unit_len,
+                min_rep_times
             ) for id, line in df_search.iterrows()
         ]
         for f in as_completed(fs):
             res = f.result()
-            rs = (res['df'].iloc[0]['repeat_seq'] if res['df'].size else '-')
-            print('{0}\t>>\t{1}'.format(res['region'], rs), flush=True)
-            df_ru.append(res['df'])
-    df_ru.set_index('id').pipe(
-        lambda d: d[[
-            *df_search.columns,
-            *[c for c in d.columns if c not in df_search.columns]
-        ]]
-    ).sort_index()
+            rs = res['df']['repeat_seq'].iloc[0] if res['df'].size else '-'
+            print('{0}\t{1}'.format(res['region'], rs), flush=True)
+            df_ru_list.append(res['df'])
+    df_ru = pd.concat(df_ru_list).reset_index().set_index('id').sort_index()
     logger.debug('df_ru:{0}{1}'.format(os.linesep, df_ru))
     ru_tsv_abspath = fetch_abspath(ru_tsv_path)
     print_log('Write repeat units data:\t{}'.format(ru_tsv_abspath))
     df_ru.to_csv(ru_tsv_abspath, index=False, sep='\t')
 
 
-def _identify_repeat_unit(region_dict, region_id, max_unit_len, min_rep_times):
-    ru_list = [
-        count_repeat_times(
-            sequence=region_dict['search_seq'], repeat_unit=''.join(t),
-            min_rep_times=min_rep_times, cut_end_len=0,
-            start_pos=region_dict['chromStart']
-        ) for t in chain.from_iterable([
-            product('ATGC', repeat=(i + 1)) for i in range(max_unit_len)
+def _make_str_regex_dict(max_unit_len=6, min_rep_times=1, bases='ACGT'):
+    units = [
+        ''.join(t) for t in chain.from_iterable([
+            product(bases, repeat=i) for i in range(max_unit_len, 0, -1)
         ])
     ]
-    ru_list_filtered = [d for d in ru_list[::-1] if d]
+    return OrderedDict([
+        (s, compile_str_regex(s, min_rep_times)) for s in units
+    ])
+
+
+def compile_str_regex(repeat_unit, min_rep_times=1):
+    return re.compile(r'(%s){%d,}' % (repeat_unit, min_rep_times))
+
+
+def _identify_repeat_unit(region_dict, region_id, regex_dict, max_unit_len,
+                          min_rep_times):
+    df_lr = extract_longest_repeat_df(
+        sequence=region_dict['search_seq'], repeat_regex_dict=regex_dict,
+        min_rep_times=min_rep_times, cut_end_len=0,
+        start_pos=region_dict['chromStart']
+    )
     return {
         'region': fetch_bed_region_str(**region_dict),
         'df': (
-            pd.DataFrame(ru_list_filtered).pipe(
-                lambda d: d.iloc[[d['repeat_times'].idxmax()]]
-            ).assign(
-                id=region_id, **region_dict,
-            ) if ru_list_filtered else pd.DataFrame()
+            df_lr.assign(id=region_id, **region_dict,).set_index([
+                'id', *region_dict.keys()
+            ]) if df_lr.size else pd.DataFrame()
         )
     }
 
 
-def count_repeat_times(sequence, repeat_unit, min_rep_times=1, cut_end_len=0,
-                       start_pos=0):
-    matches = [
-        (*m.span(), m.group(0)) for m in re.finditer(
-            (r'(%s){%d,}' % (repeat_unit, min_rep_times)), sequence
-        )
-    ]
-    if matches:
-        df_m = pd.DataFrame(
-            matches, columns=['start_idx', 'end_idx', 'repeat_seq']
-        ).pipe(
-            lambda d: d[
-                (d['start_idx'] >= cut_end_len) &
-                (d['end_idx'] <= len(sequence) - cut_end_len)
-            ]
-        )
-        if df_m.shape[0]:
-            return {
-                'repeat_unit': repeat_unit,
-                'repeat_unit_size': len(repeat_unit),
-                **df_m.assign(
-                    repeat_times=lambda d: np.int32(
-                        (d['end_idx'] - d['start_idx']) / len(repeat_unit)
-                    ),
-                    repeat_start=lambda d: d['start_idx'] + start_pos,
-                    repeat_end=lambda d: d['end_idx'] + start_pos - 1
-                ).drop(
-                    columns=['start_idx', 'end_idx']
-                ).pipe(
-                    lambda d: d.iloc[d['repeat_times'].idxmax()]
-                ).to_dict()
-            }
-        else:
-            return dict()
+def extract_longest_repeat_df(sequence, regex_dict, cut_end_len=0,
+                              start_pos=0):
+    candidates0 = chain.from_iterable([
+        [(*m.span(), m.group(0), u) for m in r.finditer(sequence)]
+        for u, r in regex_dict.items()
+    ])
+    if not candidates0:
+        return pd.DataFrame()
     else:
-        return dict()
+        candidates1 = [
+            t for t in candidates0
+            if t[0] >= cut_end_len and t[1] < len(sequence) - cut_end_len
+        ]
+        if not candidates1:
+            return pd.DataFrame()
+        else:
+            return pd.DataFrame(
+                candidates1,
+                columns=['start_idx', 'end_idx', 'repeat_seq', 'repeat_unit']
+            ).assign(
+                repeat_unit_size=lambda d: d['repeat_unit'].apply(len),
+                repeat_start=lambda d: d['start_idx'] + start_pos,
+                repeat_end=lambda d: d['end_idx'] + start_pos - 1
+            ).assign(
+                repeat_times=lambda d: np.int32(
+                    (d['end_idx'] - d['start_idx']) / d['repeat_unit_size']
+                )
+            ).drop(
+                columns=['start_idx', 'end_idx']
+            ).pipe(
+                lambda d: d.iloc[[d['repeat_times'].idxmax()]]
+            )

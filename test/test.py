@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 import unittest
-from msir.call.identifier import count_repeat_times
+from msir.call.identifier import extract_longest_repeat_df, \
+    _make_str_regex_dict
 
 
 class TandemRepeats(unittest.TestCase):
@@ -16,19 +17,20 @@ class TandemRepeats(unittest.TestCase):
             'repeat_unit': 'A', 'repeat_unit_size': 1, 'repeat_times': 11,
             'repeat_start': 6, 'repeat_end': 16
         },
-        'TATTTATTATTATTATTATT': {
+        'TATTTTATTATTATTATTAG': {
             'repeat_unit': 'TTA', 'repeat_unit_size': 3, 'repeat_times': 5,
-            'repeat_start': 3, 'repeat_end': 17
+            'repeat_start': 4, 'repeat_end': 18
         }
     }
 
-    def test_count_repeat_times(self):
+    def test_extract_longest_repeat_df(self):
         """tandem repeat count from sequences
         """
+        red = _make_str_regex_dict(max_unit_len=3)
         for s, d in self.reads.items():
-            r = count_repeat_times(sequence=s, repeat_unit=d['repeat_unit'])
+            df = extract_longest_repeat_df(sequence=s, regex_dict=red)
             for k, v in d.items():
-                self.assertEqual(v, r.get(k))
+                self.assertEqual(v, df[k].iloc[0])
 
 
 if __name__ == '__main__':
