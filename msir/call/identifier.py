@@ -49,10 +49,8 @@ def identify_repeat_units_on_bed(bed_path, genome_fa_path, ru_tsv_path,
     df_ru_list = []
     with ProcessPoolExecutor(max_workers=n_proc) as x:
         fs = [
-            x.submit(
-                _identify_repeat_unit, line, id, regex_dict, max_unit_len,
-                min_rep_times
-            ) for id, line in df_search.iterrows()
+            x.submit(_identify_repeat_unit, line, id, regex_dict)
+            for id, line in df_search.iterrows()
         ]
         for f in as_completed(fs):
             res = f.result()
@@ -81,12 +79,10 @@ def compile_str_regex(repeat_unit, min_rep_times=1):
     return re.compile(r'(%s){%d,}' % (repeat_unit, min_rep_times))
 
 
-def _identify_repeat_unit(region_dict, region_id, regex_dict, max_unit_len,
-                          min_rep_times):
+def _identify_repeat_unit(region_dict, region_id, regex_dict):
     df_lr = extract_longest_repeat_df(
-        sequence=region_dict['search_seq'], repeat_regex_dict=regex_dict,
-        min_rep_times=min_rep_times, cut_end_len=0,
-        start_pos=region_dict['chromStart']
+        sequence=region_dict['search_seq'], regex_dict=regex_dict,
+        cut_end_len=0, start_pos=region_dict['chromStart']
     )
     return {
         'region': fetch_bed_region_str(**region_dict),
@@ -102,14 +98,14 @@ def extract_longest_repeat_df(sequence, regex_dict, cut_end_len=0,
                               start_pos=0):
     candidates0 = chain.from_iterable([
         [(*m.span(), m.group(0), u) for m in r.finditer(sequence)]
-        for u, r in regex_dict.items()
+        for u, r in regex_dict.items() if u in sequence
     ])
     if not candidates0:
         return pd.DataFrame()
     else:
         candidates1 = [
             t for t in candidates0
-            if t[0] >= cut_end_len and t[1] < len(sequence) - cut_end_len
+            if t[0] >= cut_end_len and t[1] <= len(sequence) - cut_end_len
         ]
         if not candidates1:
             return pd.DataFrame()

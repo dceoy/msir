@@ -48,9 +48,9 @@ def fetch_bed_region_str(**kwargs):
 
 def read_fasta(fa_path):
     if fa_path.endswith('.gz'):
-        f = gzip.open(fa_path, 'r')
+        f = gzip.open(fa_path, 'rt')
     elif fa_path.endswith('.bz2'):
-        f = bz2.open(fa_path, 'r')
+        f = bz2.open(fa_path, 'rt')
     else:
         f = open(fa_path, 'r')
     records = SeqIO.to_dict(SeqIO.parse(f, 'fasta'))

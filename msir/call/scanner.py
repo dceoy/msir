@@ -28,7 +28,7 @@ def scan_tandem_repeats_in_reads(bam_paths, ru_tsv_path, out_dir_path,
     df_ru = pd.read_csv(ru_tsv_path, sep='\t')
     regex_dict = OrderedDict([
         compile_str_regex(repeat_unit=s, min_rep_times=1)
-        for s in df_ru['repeat_unit']
+        for s in set(df_ru['repeat_unit'])
     ])
     logger.debug('regex_dict:' + os.linesep + pformat(regex_dict))
     out_dir_abspath = fetch_abspath(out_dir_path)
@@ -50,22 +50,21 @@ def scan_tandem_repeats_in_reads(bam_paths, ru_tsv_path, out_dir_path,
                 )[['region', 'repeat_times_in_read', 'repeat_times_count']]
                 print(d.to_string(index=False, header=False), flush=True)
                 df_read_list.append(res['df'])
-        df_read = pd.concat(df_read_list)
+        df_read = pd.concat(df_read_list).set_index('id').sort_index()
         logger.debug('df_read:{0}{1}'.format(os.linesep, df_read))
-        result_tsv_path = os.path.join(
+        res_tsv_path = os.path.join(
             out_dir_abspath, '{0}.msir.{1}'.format(p, table_ext)
         )
-        print_log('Write results into:\t{}'.format(result_tsv_path))
+        print_log('Write results into:\t{}'.format(res_tsv_path))
         df_read.to_csv(
-            result_tsv_path, mode='a',
-            header=(not os.path.isfile(result_tsv_path)),
-            sep={'csv': ',', 'tsv': '\t'}[table_ext]
+            res_tsv_path, index=False, sep={'csv': ',', 'tsv': '\t'}[table_ext]
         )
 
 
 def _count_repeats_in_reads(bam_path, tsvline, id, regex_dict, cut_end_len,
                             samtools):
     region = fetch_bed_region_str(**tsvline)
+    bed_cols = ['chrom', 'chromStart', 'chromEnd']
     return {
         'region': region,
         'df': pd.concat([
@@ -82,5 +81,9 @@ def _count_repeats_in_reads(bam_path, tsvline, id, regex_dict, cut_end_len,
             name='repeat_times_count'
         ).reset_index().rename(
             columns={'index': 'repeat_times_in_read'}
-        ).assign(id=id, **tsvline)
+        ).assign(
+            id=id, **{k: tsvline[k] for k in bed_cols}
+        ).sort_values(
+            'repeat_times_count', ascending=False
+        )[['id', *bed_cols, 'repeat_times_in_read', 'repeat_times_count']]
     }
