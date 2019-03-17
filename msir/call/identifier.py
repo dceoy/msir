@@ -10,8 +10,8 @@ import re
 import numpy as np
 import pandas as pd
 from ..df.beddf import BedDataFrame
-from ..util.helper import fetch_abspath, fetch_bed_region_str, print_log, \
-    read_fasta, validate_files_and_dirs
+from ..util.biotools import fetch_bed_region_str, read_fasta
+from ..util.helper import fetch_abspath, print_log, validate_files_and_dirs
 
 
 def identify_repeat_units_on_bed(bed_path, genome_fa_path, ru_tsv_path,
@@ -49,19 +49,28 @@ def identify_repeat_units_on_bed(bed_path, genome_fa_path, ru_tsv_path,
     df_ru_list = []
     with ProcessPoolExecutor(max_workers=n_proc) as x:
         fs = [
-            x.submit(_identify_repeat_unit, line, id, regex_dict)
-            for id, line in df_search.iterrows()
+            x.submit(_identify_repeat_unit, bedline, id, regex_dict)
+            for id, bedline in df_search.iterrows()
         ]
         for f in as_completed(fs):
             res = f.result()
-            rs = res['df']['repeat_seq'].iloc[0] if res['df'].size else '-'
-            print('{0}\t{1}'.format(res['region'], rs), flush=True)
+            _print_state_line(res=res)
             df_ru_list.append(res['df'])
     df_ru = pd.concat(df_ru_list).reset_index().set_index('id').sort_index()
     logger.debug('df_ru:{0}{1}'.format(os.linesep, df_ru))
     ru_tsv_abspath = fetch_abspath(ru_tsv_path)
     print_log('Write repeat units data:\t{}'.format(ru_tsv_abspath))
     df_ru.to_csv(ru_tsv_abspath, index=False, sep='\t')
+
+
+def _print_state_line(res):
+    d = res['df'].iloc[0].to_dict() if res['df'].size else dict()
+    line = '  {0:<25}\t{1:<10}\t{2}'.format(
+        res['region'],
+        ('{0}x{1}'.format(d['repeat_times'], d['repeat_unit']) if d else '-'),
+        (d['repeat_seq'] if d else '-')
+    )
+    print(line, flush=True)
 
 
 def _make_str_regex_dict(max_unit_len=6, min_rep_times=1, bases='ACGT'):

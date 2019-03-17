@@ -65,7 +65,7 @@ def main():
             bam_paths=args['<bam>'], ru_tsv_path=args['--unit-tsv'],
             out_dir_path=args['--out-dir'], output_csv=args['--csv'],
             index_bam=args['--index-bam'], samtools=args['--samtools'],
-            cut_end_len=args['--cut-end-len'], n_proc=n_proc
+            cut_end_len=int(args['--cut-end-len']), n_proc=n_proc
         )
     elif args['id']:
         identify_repeat_units_on_bed(

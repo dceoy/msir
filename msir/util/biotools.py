@@ -1,11 +1,32 @@
 #!/usr/bin/env python
 
+import bz2
+import gzip
 import io
 import logging
 import os
 import subprocess
+from Bio import SeqIO
 import pandas as pd
 from ..util.helper import fetch_executable, print_log, run_and_parse_subprocess
+
+
+def fetch_bed_region_str(**kwargs):
+    return '{0}:{1}-{2}'.format(*[
+        kwargs.get(k) for k in ['chrom', 'chromStart', 'chromEnd']
+    ])
+
+
+def read_fasta(fa_path):
+    if fa_path.endswith('.gz'):
+        f = gzip.open(fa_path, 'rt')
+    elif fa_path.endswith('.bz2'):
+        f = bz2.open(fa_path, 'rt')
+    else:
+        f = open(fa_path, 'r')
+    records = SeqIO.to_dict(SeqIO.parse(f, 'fasta'))
+    f.close()
+    return records
 
 
 def validate_or_prepare_bam_indexes(bam_paths, index_bam=False, n_proc=8,
@@ -28,7 +49,7 @@ def validate_or_prepare_bam_indexes(bam_paths, index_bam=False, n_proc=8,
             print_log('Index BAM/CRAM files.')
             samtools = samtools_path or fetch_executable('samtools')
             for p in bam_paths_without_bai:
-                args = [samtools, 'index', '-@', n_proc, p]
+                args = [samtools, 'index', '-@', str(n_proc), p]
                 logger.debug('args: {}'.format(args))
                 subprocess.run(args=args, check=True)
         else:
@@ -66,4 +87,4 @@ def _parse_sam_line(line):
     col_dtypes = {k: (fixed_col_dtypes.get(k) or str) for k in cols}
     return pd.read_csv(
         io.StringIO(line), header=None, names=cols, dtype=col_dtypes, sep='\t'
-    ).to_dict()
+    ).iloc[0].to_dict()

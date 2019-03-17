@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 
-import bz2
-import gzip
 import logging
 import os
 import subprocess
-from Bio import SeqIO
 
 
 def validate_files_and_dirs(files=[], dirs=[]):
@@ -38,24 +35,6 @@ def fetch_executable(cmd):
 
 def print_log(message, prompt='>>>'):
     print('{0}\t{1}'.format(prompt, message), flush=True)
-
-
-def fetch_bed_region_str(**kwargs):
-    return '{0}:{1}-{2}'.format(*[
-        kwargs.get(k) for k in ['chrom', 'chromStart', 'chromEnd']
-    ])
-
-
-def read_fasta(fa_path):
-    if fa_path.endswith('.gz'):
-        f = gzip.open(fa_path, 'rt')
-    elif fa_path.endswith('.bz2'):
-        f = bz2.open(fa_path, 'rt')
-    else:
-        f = open(fa_path, 'r')
-    records = SeqIO.to_dict(SeqIO.parse(f, 'fasta'))
-    f.close()
-    return records
 
 
 def run_and_parse_subprocess(args, stdout=subprocess.PIPE,

@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 
-from collections import OrderedDict
 from concurrent.futures import as_completed, ProcessPoolExecutor
 import logging
 import os
-from pprint import pformat
 import pandas as pd
-from ..util.helper import fetch_abspath, fetch_bed_region_str, print_log, \
-    validate_files_and_dirs
-from ..util.samtools import validate_or_prepare_bam_indexes, view_bam_lines
+from ..util.helper import fetch_abspath, print_log, validate_files_and_dirs
+from ..util.biotools import fetch_bed_region_str, \
+    validate_or_prepare_bam_indexes, view_bam_lines
 from .identifier import compile_str_regex, extract_longest_repeat_df
 
 
@@ -26,11 +24,11 @@ def scan_tandem_repeats_in_reads(bam_paths, ru_tsv_path, out_dir_path,
     )
     print_log('Load repeat units data:\t{}'.format(ru_tsv_path))
     df_ru = pd.read_csv(ru_tsv_path, sep='\t')
-    regex_dict = OrderedDict([
-        compile_str_regex(repeat_unit=s, min_rep_times=1)
+    regex_dict = {
+        s: compile_str_regex(repeat_unit=s, min_rep_times=1)
         for s in set(df_ru['repeat_unit'])
-    ])
-    logger.debug('regex_dict:' + os.linesep + pformat(regex_dict))
+    }
+    logger.debug('list(regex_dict.keys()): {}'.format(list(regex_dict.keys())))
     out_dir_abspath = fetch_abspath(out_dir_path)
     table_ext = 'csv' if output_csv else 'tsv'
     for p in bam_abspaths:
@@ -45,15 +43,13 @@ def scan_tandem_repeats_in_reads(bam_paths, ru_tsv_path, out_dir_path,
             ]
             for f in as_completed(fs):
                 res = f.result()
-                d = res['df'].assign(
-                    region=res['region']
-                )[['region', 'repeat_times_in_read', 'repeat_times_count']]
-                print(d.to_string(index=False, header=False), flush=True)
+                _print_state_line(res=res, bam_path=p)
                 df_read_list.append(res['df'])
         df_read = pd.concat(df_read_list).set_index('id').sort_index()
         logger.debug('df_read:{0}{1}'.format(os.linesep, df_read))
         res_tsv_path = os.path.join(
-            out_dir_abspath, '{0}.msir.{1}'.format(p, table_ext)
+            out_dir_abspath,
+            '{0}.repears.{1}'.format(os.path.basename(p), table_ext)
         )
         print_log('Write results into:\t{}'.format(res_tsv_path))
         df_read.to_csv(
@@ -61,29 +57,43 @@ def scan_tandem_repeats_in_reads(bam_paths, ru_tsv_path, out_dir_path,
         )
 
 
+def _print_state_line(res, bam_path):
+    if res['df'].size:
+        for i, r in res['df'].iterrows():
+            line = '  {0}\t{1:<25}\t{2:<10}\t{3}'.format(
+                os.path.basename(bam_path), res['region'],
+                '{0}x{1}'.format(r['read_repeat_times'], r['repeat_unit']),
+                r['read_repeat_times_count']
+            )
+            print(line, flush=True)
+
+
 def _count_repeats_in_reads(bam_path, tsvline, id, regex_dict, cut_end_len,
                             samtools):
     region = fetch_bed_region_str(**tsvline)
     bed_cols = ['chrom', 'chromStart', 'chromEnd']
-    return {
-        'region': region,
-        'df': pd.concat([
-            extract_longest_repeat_df(
-                sequence=d['SEQ'],
-                regex_dict={tsvline['repeat_unit']: regex_dict['repeat_unit']},
-                cut_end_len=cut_end_len, start_pos=d['POS']
-            )['repeat_times']
-            for d in view_bam_lines(
-                bam_path=bam_path, regions=[region], options=['-F', '4'],
-                samtools_path=samtools
-            )
-        ]).value_counts().to_frame(
-            name='repeat_times_count'
+    ru = tsvline['repeat_unit']
+    df_bam = pd.concat([
+        extract_longest_repeat_df(
+            sequence=d['SEQ'], regex_dict={ru: regex_dict[ru]},
+            cut_end_len=cut_end_len, start_pos=d['POS']
+        ) for d in view_bam_lines(
+            bam_path=bam_path, regions=[region], samtools_path=samtools
+        )
+    ])
+    df_rt = (
+        df_bam['repeat_times'].value_counts().to_frame(
+            name='read_repeat_times_count'
         ).reset_index().rename(
-            columns={'index': 'repeat_times_in_read'}
+            columns={'index': 'read_repeat_times'}
         ).assign(
-            id=id, **{k: tsvline[k] for k in bed_cols}
+            id=id, **{k: tsvline[k] for k in bed_cols}, repeat_unit=ru
         ).sort_values(
-            'repeat_times_count', ascending=False
-        )[['id', *bed_cols, 'repeat_times_in_read', 'repeat_times_count']]
-    }
+            'read_repeat_times_count', ascending=False
+        )[[
+            'id', *bed_cols, 'repeat_unit', 'read_repeat_times',
+            'read_repeat_times_count'
+        ]]
+        if df_bam.size else pd.DataFrame()
+    )
+    return {'region': region, 'df': df_rt}
