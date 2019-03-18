@@ -11,8 +11,9 @@ from .identifier import compile_str_regex, extract_longest_repeat_df
 
 
 def scan_tandem_repeats_in_reads(bam_paths, ru_tsv_path, out_dir_path,
-                                 index_bam=False, samtools=None,
-                                 cut_end_len=10, output_csv=False, n_proc=8):
+                                 out_file_path=None, index_bam=False,
+                                 samtools=None, cut_end_len=10,
+                                 use_csv_format=False, n_proc=8):
     logger = logging.getLogger(__name__)
     validate_files_and_dirs(
         files=[ru_tsv_path, *bam_paths], dirs=[out_dir_path]
@@ -29,8 +30,10 @@ def scan_tandem_repeats_in_reads(bam_paths, ru_tsv_path, out_dir_path,
         for s in set(df_ru['repeat_unit'])
     }
     logger.debug('list(regex_dict.keys()): {}'.format(list(regex_dict.keys())))
-    out_dir_abspath = fetch_abspath(out_dir_path)
-    table_ext = 'csv' if output_csv else 'tsv'
+    tabfmt = (
+        {'ext': 'csv', 'sep': ','} if use_csv_format
+        else {'ext': 'tsv', 'sep': '\t'}
+    )
     for p in bam_abspaths:
         print_log('Extract tandem repeats on reads:\t{}'.format(p))
         df_read_list = []
@@ -47,14 +50,23 @@ def scan_tandem_repeats_in_reads(bam_paths, ru_tsv_path, out_dir_path,
                 df_read_list.append(res['df'])
         df_read = pd.concat(df_read_list).set_index('id').sort_index()
         logger.debug('df_read:{0}{1}'.format(os.linesep, df_read))
-        res_tsv_path = os.path.join(
-            out_dir_abspath,
-            '{0}.repears.{1}'.format(os.path.basename(p), table_ext)
+        res_tsv_path = fetch_abspath(
+            out_file_path or os.path.join(
+                out_dir_path,
+                '{0}.repears.{1}'.format(os.path.basename(p), tabfmt['ext'])
+            )
         )
         print_log('Write results into:\t{}'.format(res_tsv_path))
-        df_read.to_csv(
-            res_tsv_path, index=False, sep={'csv': ',', 'tsv': '\t'}[table_ext]
-        )
+        if out_file_path:
+            df_read.pipe(
+                lambda d: d.assign(data_path=p)[['data_path', *d.columns]]
+            ).to_csv(
+                res_tsv_path, index=False, sep=tabfmt['sep'], mode='a',
+                header=(not os.path.isfile(res_tsv_path))
+            )
+        else:
+            df_read.to_csv(res_tsv_path, index=False, sep=tabfmt['sep'])
+    logger.debug('all the processes done.')
 
 
 def _print_state_line(res, bam_path):

@@ -6,9 +6,9 @@ Usage:
     msir id [--debug] [--max-unit-len=<int>] [--min-rep-times=<int>]
             [--ex-region-len=<int>] [--processes=<int>] [--unit-tsv=<path>]
             <bed> <fasta>
-    msir count [--debug] [--unit-tsv=<path>] [--out-dir=<path>] [--index-bam]
-               [--samtools=<path>] [--cut-end-len=<int>] [--csv]
-               [--processes=<int>] <bam>...
+    msir count [--debug] [--unit-tsv=<path>] [--out-dir=<path>]
+               [--out-file=<path>] [--index-bam] [--samtools=<path>]
+               [--cut-end-len=<int>] [--csv] [--processes=<int>] <bam>...
     msir -h|--help
     msir -v|--version
 
@@ -22,6 +22,7 @@ Options:
     --processes=<int>       Limit max cores for multiprocessing
     --unit-tsv=<path>       Set a TSV file of repeat units [default: ru.tsv]
     --out-dir=<path>        Pass an output directory [default: .]
+    --out-file=<path>       Write output data in a single file
     --index-bam             Index BAM or CRAM files if required
     --samtools=<path>       Set a path to samtools command
     --cut-end-len=<int>     Ignore repeats on ends of reads [default: 10]
@@ -63,8 +64,9 @@ def main():
     if args['count']:
         scan_tandem_repeats_in_reads(
             bam_paths=args['<bam>'], ru_tsv_path=args['--unit-tsv'],
-            out_dir_path=args['--out-dir'], output_csv=args['--csv'],
-            index_bam=args['--index-bam'], samtools=args['--samtools'],
+            out_dir_path=args['--out-dir'], out_file_path=args['--out-file'],
+            use_csv_format=args['--csv'], index_bam=args['--index-bam'],
+            samtools=args['--samtools'],
             cut_end_len=int(args['--cut-end-len']), n_proc=n_proc
         )
     elif args['id']:
