@@ -23,6 +23,7 @@ Options:
     --unit-tsv=<path>       Set a TSV file of repeat units [default: ru.tsv]
     --out-dir=<path>        Pass an output directory [default: .]
     --out-file=<path>       Write output data in a single file
+                            (overrides --out-dir)
     --index-bam             Index BAM or CRAM files if required
     --samtools=<path>       Set a path to samtools command
     --cut-end-len=<int>     Ignore repeats on ends of reads [default: 10]

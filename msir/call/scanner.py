@@ -3,10 +3,10 @@
 from concurrent.futures import as_completed, ProcessPoolExecutor
 import logging
 import os
+import numpy as np
 import pandas as pd
 from ..util.helper import fetch_abspath, print_log, validate_files_and_dirs
-from ..util.biotools import fetch_bed_region_str, \
-    validate_or_prepare_bam_indexes, view_bam_lines
+from ..util.biotools import validate_or_prepare_bam_indexes, view_bam_lines
 from .identifier import compile_str_regex, extract_longest_repeat_df
 
 
@@ -74,38 +74,43 @@ def _print_state_line(res, bam_path):
         for i, r in res['df'].iterrows():
             line = '  {0}\t{1:<25}\t{2:<10}\t{3}'.format(
                 os.path.basename(bam_path), res['region'],
-                '{0}x{1}'.format(r['read_repeat_times'], r['repeat_unit']),
-                r['read_repeat_times_count']
+                '{0}x{1}'.format(r['observed_repeat_times'], r['repeat_unit']),
+                r['observed_repeat_times_count']
             )
             print(line, flush=True)
 
 
 def _count_repeats_in_reads(bam_path, tsvline, id, regex_dict, cut_end_len,
                             samtools):
-    region = fetch_bed_region_str(**tsvline)
+    pos = int(np.mean([tsvline['repeat_start'], tsvline['repeat_start']]))
+    region = '{0}:{1}-{1}'.format(tsvline['chrom'], pos)
     bed_cols = ['chrom', 'chromStart', 'chromEnd']
     ru = tsvline['repeat_unit']
-    df_bam = pd.concat([
-        extract_longest_repeat_df(
-            sequence=d['SEQ'], regex_dict={ru: regex_dict[ru]},
-            cut_end_len=cut_end_len, start_pos=d['POS']
-        ) for d in view_bam_lines(
-            bam_path=bam_path, regions=[region], samtools_path=samtools
-        )
-    ])
-    df_rt = (
-        df_bam['repeat_times'].value_counts().to_frame(
-            name='read_repeat_times_count'
+    df_bam = pd.DataFrame()
+    for d in view_bam_lines(bam_path=bam_path, regions=[region],
+                            samtools_path=samtools):
+        if (d['POS'] >= pos - cut_end_len and
+                d['POS'] + len(d['SEQ']) >= pos + cut_end_len):
+            df = extract_longest_repeat_df(
+                sequence=d['SEQ'], regex_dict={ru: regex_dict[ru]},
+                cut_end_len=cut_end_len, start_pos=d['POS']
+            )
+            if df.size:
+                df_bam = df_bam.append(df)
+    if df_bam.size:
+        df_rt = df_bam['repeat_times'].value_counts().to_frame(
+            name='observed_repeat_times_count'
         ).reset_index().rename(
-            columns={'index': 'read_repeat_times'}
+            columns={'index': 'observed_repeat_times'}
         ).assign(
-            id=id, **{k: tsvline[k] for k in bed_cols}, repeat_unit=ru
+            id=id, observation_point=region,
+            **{k: tsvline[k] for k in bed_cols}, repeat_unit=ru
         ).sort_values(
-            'read_repeat_times_count', ascending=False
+            'observed_repeat_times_count', ascending=False
         )[[
-            'id', *bed_cols, 'repeat_unit', 'read_repeat_times',
-            'read_repeat_times_count'
+            'id', *bed_cols, 'repeat_unit', 'observation_point',
+            'observed_repeat_times', 'observed_repeat_times_count'
         ]]
-        if df_bam.size else pd.DataFrame()
-    )
+    else:
+        df_rt = pd.DataFrame()
     return {'region': region, 'df': df_rt}
