@@ -3,7 +3,6 @@
 from concurrent.futures import as_completed, ProcessPoolExecutor
 import logging
 import os
-import numpy as np
 import pandas as pd
 from ..util.helper import fetch_abspath, print_log, validate_files_and_dirs
 from ..util.biotools import validate_or_prepare_bam_indexes, view_bam_lines
@@ -82,15 +81,13 @@ def _print_state_line(res, bam_path):
 
 def _count_repeats_in_reads(bam_path, tsvline, id, regex_dict, cut_end_len,
                             samtools):
-    pos = int(np.mean([tsvline['repeat_start'], tsvline['repeat_start']]))
-    region = '{0}:{1}-{1}'.format(tsvline['chrom'], pos)
+    region = '{0}:{1}-{1}'.format(tsvline['chrom'], tsvline['repeat_start'])
     bed_cols = ['chrom', 'chromStart', 'chromEnd']
     ru = tsvline['repeat_unit']
     df_bam = pd.DataFrame()
     for d in view_bam_lines(bam_path=bam_path, regions=[region],
                             samtools_path=samtools):
-        if (d['POS'] >= pos - cut_end_len and
-                d['POS'] + len(d['SEQ']) >= pos + cut_end_len):
+        if d['POS'] >= tsvline['repeat_start'] - cut_end_len:
             df = extract_longest_repeat_df(
                 sequence=d['SEQ'], regex_dict={ru: regex_dict[ru]},
                 cut_end_len=cut_end_len, start_pos=d['POS']

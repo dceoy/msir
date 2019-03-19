@@ -34,7 +34,7 @@ def identify_repeat_units_on_bed(bed_path, genome_fa_path, ru_tsv_path,
             lambda r: min(fa_seqs_lens[r[0]] - 1, r[1] + ex_region_len), axis=1
         )
     ).assign(
-        search_seq=lambda d: d[['chrom', 'chromStart', 'chromEnd']].apply(
+        search_seq=lambda d: d[['chrom', 'search_start', 'search_end']].apply(
             lambda r: str(fa_seqs[r[0]].seq[int(r[1]):int(r[2])].upper()),
             axis=1
         )
@@ -125,7 +125,7 @@ def extract_longest_repeat_df(sequence, regex_dict, cut_end_len=0,
             ).assign(
                 repeat_unit_size=lambda d: d['repeat_unit'].apply(len),
                 repeat_start=lambda d: d['start_idx'] + start_pos,
-                repeat_end=lambda d: d['end_idx'] + start_pos - 1
+                repeat_end=lambda d: d['end_idx'] + start_pos
             ).assign(
                 repeat_times=lambda d: np.int32(
                     (d['end_idx'] - d['start_idx']) / d['repeat_unit_size']
