@@ -6,9 +6,9 @@ Usage:
     msir id [--debug] [--max-unit-len=<int>] [--min-rep-times=<int>]
             [--ex-region-len=<int>] [--processes=<int>] [--unit-tsv=<path>]
             <bed> <fasta>
-    msir count [--debug] [--unit-tsv=<path>] [--out-dir=<path>]
-               [--out-file=<path>] [--index-bam] [--samtools=<path>]
-               [--cut-end-len=<int>] [--csv] [--processes=<int>] <bam>...
+    msir count [--debug] [--unit-tsv=<path>] [--count-tsv=<path>]
+               [--index-bam] [--samtools=<path>] [--cut-end-len=<int>]
+               [--processes=<int>] <bam>...
     msir -h|--help
     msir -v|--version
 
@@ -20,14 +20,11 @@ Options:
     --min-rep-times=<int>   Set a minimum repeat times [default: 3]
     --ex-region-len=<int>   Search around extra regions [default: 20]
     --processes=<int>       Limit max cores for multiprocessing
-    --unit-tsv=<path>       Set a TSV file of repeat units [default: ru.tsv]
-    --out-dir=<path>        Pass an output directory [default: .]
-    --out-file=<path>       Write output data in a single file
-                            (overrides --out-dir)
+    --unit-tsv=<path>       Set a TSV file for repeat units [default: ru.tsv]
+    --count-tsv=<path>      Set a TSV file for repeat counts [default: rc.tsv]
     --index-bam             Index BAM or CRAM files if required
     --samtools=<path>       Set a path to samtools command
     --cut-end-len=<int>     Ignore repeats on ends of reads [default: 10]
-    --csv                   Write results with CSV instead of TSV
 
 Arguments:
     <bed>                   Path to a BED file of repetitive regions
@@ -42,6 +39,7 @@ Commands:
 import logging
 from multiprocessing import cpu_count
 import os
+import signal
 from docopt import docopt
 from .. import __version__
 from ..call.identifier import identify_repeat_units_on_bed
@@ -62,11 +60,11 @@ def main():
     logger.debug('args:{0}{1}'.format(os.linesep, args))
     n_proc = int(args['--processes'] or cpu_count())
     logger.debug('n_proc: {}'.format(n_proc))
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
     if args['count']:
         scan_tandem_repeats_in_reads(
             bam_paths=args['<bam>'], ru_tsv_path=args['--unit-tsv'],
-            out_dir_path=args['--out-dir'], out_file_path=args['--out-file'],
-            use_csv_format=args['--csv'], index_bam=args['--index-bam'],
+            result_tsv_path=args['--count-tsv'], index_bam=args['--index-bam'],
             samtools=args['--samtools'],
             cut_end_len=int(args['--cut-end-len']), n_proc=n_proc
         )

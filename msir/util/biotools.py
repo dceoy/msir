@@ -8,25 +8,34 @@ import os
 import subprocess
 from Bio import SeqIO
 import pandas as pd
-from ..util.helper import fetch_executable, print_log, run_and_parse_subprocess
+from ..df.beddf import BedDataFrame
+from .helper import fetch_abspath, fetch_executable, print_log, \
+    run_and_parse_subprocess
+
+
+def read_fasta(path):
+    p = fetch_abspath(path=path)
+    if p.endswith('.gz'):
+        f = gzip.open(p, 'rt')
+    elif p.endswith('.bz2'):
+        f = bz2.open(p, 'rt')
+    else:
+        f = open(p, 'r')
+    records = SeqIO.to_dict(SeqIO.parse(f, 'fasta'))
+    f.close()
+    return records
+
+
+def read_bed(path):
+    beddf = BedDataFrame(path=fetch_abspath(path=path))
+    beddf.load()
+    return beddf.df
 
 
 def convert_bed_line_to_sam_region(bedline):
     return '{0}:{1}-{2}'.format(
         bedline['chrom'], bedline['chromStart'] + 1,  bedline['chromEnd'] + 1
     )
-
-
-def read_fasta(fa_path):
-    if fa_path.endswith('.gz'):
-        f = gzip.open(fa_path, 'rt')
-    elif fa_path.endswith('.bz2'):
-        f = bz2.open(fa_path, 'rt')
-    else:
-        f = open(fa_path, 'r')
-    records = SeqIO.to_dict(SeqIO.parse(f, 'fasta'))
-    f.close()
-    return records
 
 
 def validate_or_prepare_bam_indexes(bam_paths, index_bam=False, n_proc=8,
@@ -36,12 +45,12 @@ def validate_or_prepare_bam_indexes(bam_paths, index_bam=False, n_proc=8,
     if invalid_exts:
         raise RuntimeError('invalid BAM/CRAM paths: {}'.format(invalid_exts))
     else:
-        bai_paths = {
-            p: (p + '.bai' if p.endswith('.bam') else p + '.crai')
+        bai_abspaths = {
+            p: fetch_abspath(p + '.bai' if p.endswith('.bam') else p + '.crai')
             for p in bam_paths
         }
         bam_paths_without_bai = [
-            k for k, v in bai_paths.items() if not os.path.isfile(v)
+            k for k, v in bai_abspaths.items() if not os.path.isfile(v)
         ]
         if not bam_paths_without_bai:
             pass
@@ -49,7 +58,7 @@ def validate_or_prepare_bam_indexes(bam_paths, index_bam=False, n_proc=8,
             print_log('Index BAM/CRAM files.')
             samtools = samtools_path or fetch_executable('samtools')
             for p in bam_paths_without_bai:
-                args = [samtools, 'index', '-@', str(n_proc), p]
+                args = [samtools, 'index', '-@', str(n_proc), fetch_abspath(p)]
                 logger.debug('args: {}'.format(args))
                 subprocess.run(args=args, check=True)
         else:
@@ -65,8 +74,10 @@ def view_bam_lines_including_region(bam_path, rname, start_pos, end_pos,
                                     parse_lines=True):
     samtools = samtools_path or fetch_executable('samtools')
     args_list = [
-        (samtools, 'view', *options, bam_path, '{0}:{1}-{1}'.format(rname, p))
-        for p in [start_pos, end_pos]
+        (
+            samtools, 'view', *options, fetch_abspath(bam_path),
+            '{0}:{1}-{1}'.format(rname, p)
+        ) for p in [start_pos, end_pos]
     ]
     end_pos_set = set(run_and_parse_subprocess(args=args_list[1]))
     for r in run_and_parse_subprocess(args=args_list[0]):
