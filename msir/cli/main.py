@@ -16,7 +16,7 @@ Options:
     -h, --help              Print help and exit
     -v, --version           Print version and exit
     --debug                 Execute a command with debug messages
-    --max-unit-len=<int>    Set a maximum length for repeat units [default: 6]
+    --max-unit-len=<int>    Set a maximum length for repeat units [default: 10]
     --min-rep-times=<int>   Set a minimum repeat times [default: 3]
     --ex-region-len=<int>   Search around extra regions [default: 20]
     --processes=<int>       Limit max cores for multiprocessing

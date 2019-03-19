@@ -11,10 +11,10 @@ import pandas as pd
 from ..util.helper import fetch_executable, print_log, run_and_parse_subprocess
 
 
-def fetch_bed_region_str(**kwargs):
-    return '{0}:{1}-{2}'.format(*[
-        kwargs.get(k) for k in ['chrom', 'chromStart', 'chromEnd']
-    ])
+def convert_bed_line_to_sam_region(bedline):
+    return '{0}:{1}-{2}'.format(
+        bedline['chrom'], bedline['chromStart'] + 1,  bedline['chromEnd'] + 1
+    )
 
 
 def read_fasta(fa_path):
@@ -60,13 +60,22 @@ def validate_or_prepare_bam_indexes(bam_paths, index_bam=False, n_proc=8,
             )
 
 
-def view_bam_lines(bam_path, regions=[], options=[], samtools_path=None):
-    logger = logging.getLogger(__name__)
+def view_bam_lines_including_region(bam_path, rname, start_pos, end_pos,
+                                    options=[], samtools_path=None,
+                                    parse_lines=True):
     samtools = samtools_path or fetch_executable('samtools')
-    args = [samtools, 'view', *options, bam_path, *regions]
-    logger.debug('args: {}'.format(args))
-    for r in run_and_parse_subprocess(args=args):
-        yield _parse_sam_line(line=r)
+    args_list = [
+        (samtools, 'view', *options, bam_path, '{0}:{1}-{1}'.format(rname, p))
+        for p in [start_pos, end_pos]
+    ]
+    end_pos_set = set(run_and_parse_subprocess(args=args_list[1]))
+    for r in run_and_parse_subprocess(args=args_list[0]):
+        if r not in end_pos_set:
+            pass
+        elif parse_lines:
+            yield _parse_sam_line(line=r)
+        else:
+            yield r
 
 
 def _parse_sam_line(line):

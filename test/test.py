@@ -10,16 +10,16 @@ class TandemRepeats(unittest.TestCase):
     """
     reads = {
         'TTTTGCAGAGTACAAGAGTG': {
-            'repeat_unit': 'T', 'repeat_unit_size': 1, 'repeat_times': 4,
-            'repeat_start': 0, 'repeat_end': 3
+            'repeat_unit': 'AG', 'repeat_unit_size': 2, 'repeat_seq_size': 4,
+            'repeat_times': 2, 'repeat_start': 6, 'repeat_end': 10
         },
         'GTTGGGAAAAAAAAAAATTG': {
-            'repeat_unit': 'A', 'repeat_unit_size': 1, 'repeat_times': 11,
-            'repeat_start': 6, 'repeat_end': 16
+            'repeat_unit': 'A', 'repeat_unit_size': 1, 'repeat_seq_size': 11,
+            'repeat_times': 11, 'repeat_start': 6, 'repeat_end': 17
         },
         'TATTTTATTATTATTATTAG': {
-            'repeat_unit': 'TTA', 'repeat_unit_size': 3, 'repeat_times': 5,
-            'repeat_start': 4, 'repeat_end': 18
+            'repeat_unit': 'TTA', 'repeat_unit_size': 3, 'repeat_seq_size': 15,
+            'repeat_times': 5, 'repeat_start': 4, 'repeat_end': 19
         }
     }
 

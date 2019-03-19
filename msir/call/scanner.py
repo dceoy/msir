@@ -5,7 +5,8 @@ import logging
 import os
 import pandas as pd
 from ..util.helper import fetch_abspath, print_log, validate_files_and_dirs
-from ..util.biotools import validate_or_prepare_bam_indexes, view_bam_lines
+from ..util.biotools import convert_bed_line_to_sam_region, \
+    validate_or_prepare_bam_indexes, view_bam_lines_including_region
 from .identifier import compile_str_regex, extract_longest_repeat_df
 
 
@@ -43,12 +44,18 @@ def scan_tandem_repeats_in_reads(bam_paths, ru_tsv_path, out_dir_path,
                     cut_end_len, samtools
                 ) for id, line in df_ru.iterrows()
             ]
-            for f in as_completed(fs):
-                res = f.result()
-                _print_state_line(res=res, bam_path=p)
-                df_read_list.append(res['df'])
-        df_read = pd.concat(df_read_list).set_index('id').sort_index()
-        logger.debug('df_read:{0}{1}'.format(os.linesep, df_read))
+            try:
+                for f in as_completed(fs):
+                    res = f.result()
+                    _print_state_line(res=res, bam_path=p)
+                    df_read_list.append(res['df'])
+            except Exception as e:
+                [f.cancel() for f in fs]
+                x.shutdown(wait=False)
+                raise e
+            else:
+                df_read = pd.concat(df_read_list).set_index('id').sort_index()
+                logger.debug('df_read:{0}{1}'.format(os.linesep, df_read))
         res_tsv_path = fetch_abspath(
             out_file_path or os.path.join(
                 out_dir_path,
@@ -81,31 +88,36 @@ def _print_state_line(res, bam_path):
 
 def _count_repeats_in_reads(bam_path, tsvline, id, regex_dict, cut_end_len,
                             samtools):
-    region = '{0}:{1}-{1}'.format(tsvline['chrom'], tsvline['repeat_start'])
     bed_cols = ['chrom', 'chromStart', 'chromEnd']
     ru = tsvline['repeat_unit']
+    region = convert_bed_line_to_sam_region(tsvline)
+    view_args = {
+        'bam_path': bam_path, 'rname': tsvline['chrom'],
+        'start_pos': (tsvline['repeat_start'] + 1 - cut_end_len),
+        'end_pos': (tsvline['repeat_end'] + cut_end_len),
+        'samtools_path': samtools
+    }
     df_bam = pd.DataFrame()
-    for d in view_bam_lines(bam_path=bam_path, regions=[region],
-                            samtools_path=samtools):
-        if d['POS'] >= tsvline['repeat_start'] - cut_end_len:
-            df = extract_longest_repeat_df(
-                sequence=d['SEQ'], regex_dict={ru: regex_dict[ru]},
-                cut_end_len=cut_end_len, start_pos=d['POS']
-            )
-            if df.size:
-                df_bam = df_bam.append(df)
+    for d in view_bam_lines_including_region(**view_args):
+        df = extract_longest_repeat_df(
+            sequence=d['SEQ'], regex_dict={ru: regex_dict[ru]},
+            cut_end_len=cut_end_len, start_pos=d['POS']
+        )
+        if df.size:
+            df_bam = df_bam.append(df)
     if df_bam.size:
         df_rt = df_bam['repeat_times'].value_counts().to_frame(
             name='observed_repeat_times_count'
         ).reset_index().rename(
             columns={'index': 'observed_repeat_times'}
         ).assign(
-            id=id, observation_point=region,
+            id=id, sam_region=region,
+            ref_repeat_times=tsvline['repeat_times'],
             **{k: tsvline[k] for k in bed_cols}, repeat_unit=ru
         ).sort_values(
             'observed_repeat_times_count', ascending=False
         )[[
-            'id', *bed_cols, 'repeat_unit', 'observation_point',
+            'id', *bed_cols, 'sam_region', 'repeat_unit', 'ref_repeat_times',
             'observed_repeat_times', 'observed_repeat_times_count'
         ]]
     else:

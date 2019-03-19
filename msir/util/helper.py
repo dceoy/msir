@@ -39,13 +39,14 @@ def print_log(message, prompt='>>>'):
 
 def run_and_parse_subprocess(args, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE, **kwargs):
+    logger = logging.getLogger(__name__)
+    logger.debug('args: {}'.format(args))
     with subprocess.Popen(args=args, stdout=stdout, stderr=stderr,
                           **kwargs) as p:
         for line in p.stdout:
             yield line.decode('utf-8')
         outs, errs = p.communicate()
         if p.returncode != 0:
-            logger = logging.getLogger(__name__)
             logger.error(
                 'STDERR from subprocess `{0}`:{1}{2}'.format(
                     p.args, os.linesep, errs.decode('utf-8')
