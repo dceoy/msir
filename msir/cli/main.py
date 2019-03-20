@@ -4,8 +4,8 @@ Tandem repeat analyzer for microsatellite instability detection by DNA-seq
 
 Usage:
     msir id [--debug] [--max-unit-len=<int>] [--min-rep-times=<int>]
-            [--ex-region-len=<int>] [--processes=<int>] [--unit-tsv=<path>]
-            <bed> <fasta>
+            [--min-rep-len=<int>] [--ex-region-len=<int>] [--processes=<int>]
+            [--unit-tsv=<path>] <bed> <fasta>
     msir count [--debug] [--unit-tsv=<path>] [--count-tsv=<path>]
                [--index-bam] [--samtools=<path>] [--cut-end-len=<int>]
                [--processes=<int>] <bam>...
@@ -18,6 +18,7 @@ Options:
     --debug                 Execute a command with debug messages
     --max-unit-len=<int>    Set a maximum length for repeat units [default: 10]
     --min-rep-times=<int>   Set a minimum repeat times [default: 3]
+    --min-rep-len=<int>     Set a minimum length for repeats [default: 10]
     --ex-region-len=<int>   Search around extra regions [default: 20]
     --processes=<int>       Limit max cores for multiprocessing
     --unit-tsv=<path>       Set a TSV file for repeat units [default: ru.tsv]
@@ -74,6 +75,7 @@ def main():
             ru_tsv_path=args['--unit-tsv'],
             max_unit_len=int(args['--max-unit-len']),
             min_rep_times=int(args['--min-rep-times']),
+            min_rep_len=int(args['--min-rep-len']),
             ex_region_len=int(args['--ex-region-len']),
             n_proc=n_proc
         )

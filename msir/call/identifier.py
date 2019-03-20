@@ -15,7 +15,7 @@ from ..util.helper import fetch_abspath, print_log, validate_files_and_dirs
 
 def identify_repeat_units_on_bed(bed_path, genome_fa_path, ru_tsv_path,
                                  max_unit_len=6, min_rep_times=3,
-                                 ex_region_len=10, n_proc=8):
+                                 min_rep_len=10, ex_region_len=10, n_proc=8):
     validate_files_and_dirs(files=[bed_path, genome_fa_path])
     print_log('Load input data:')
     df_exbed = _make_extented_bed_df(
@@ -29,7 +29,8 @@ def identify_repeat_units_on_bed(bed_path, genome_fa_path, ru_tsv_path,
     print('\t{}'.format(len(regex_patterns)), flush=True)
     print_log('Identify repeat units on BED regions:')
     df_ru = _make_repeat_unit_df(
-        df_exbed=df_exbed, regex_patterns=regex_patterns, n_proc=n_proc
+        df_exbed=df_exbed, regex_patterns=regex_patterns,
+        min_rep_len=min_rep_len, n_proc=n_proc
     )
     print_log('Write repeat units data:\t{}'.format(ru_tsv_path))
     df_ru.to_csv(fetch_abspath(ru_tsv_path), index=False, sep='\t')
@@ -70,11 +71,13 @@ def compile_str_regex(repeat_unit, min_rep_times=1):
     return re.compile(r'(%s){%d,}' % (repeat_unit, min_rep_times))
 
 
-def _make_repeat_unit_df(df_exbed, regex_patterns, n_proc=8):
+def _make_repeat_unit_df(df_exbed, regex_patterns, min_rep_len=10, n_proc=8):
     ppx = ProcessPoolExecutor(max_workers=n_proc)
     fs = [
-        ppx.submit(_identify_repeat_unit, bedline, id, regex_patterns)
-        for id, bedline in df_exbed.iterrows()
+        ppx.submit(
+            _identify_repeat_unit, bedline, id, regex_patterns,
+            min_rep_len
+        ) for id, bedline in df_exbed.iterrows()
     ]
     df_ru = pd.DataFrame()
     try:
@@ -94,27 +97,32 @@ def _make_repeat_unit_df(df_exbed, regex_patterns, n_proc=8):
     return df_ru
 
 
-def _identify_repeat_unit(bedline, region_id, regex_patterns):
+def _identify_repeat_unit(bedline, region_id, regex_patterns, min_rep_len):
     return {
         'region': convert_bed_line_to_sam_region(bedline),
         'df': extract_longest_repeat_df(
             sequence=bedline['search_seq'], regex_patterns=regex_patterns,
-            cut_end_len=0, start_pos=bedline['chromStart']
+            min_rep_len=min_rep_len, cut_end_len=0,
+            start_pos=bedline['chromStart']
         ).assign(
             id=region_id, **bedline
         ).set_index(['id', *bedline.keys()]).reset_index()
     }
 
 
-def extract_longest_repeat_df(sequence, regex_patterns, cut_end_len=0,
-                              start_pos=0):
-    hits = chain.from_iterable([
-        [(*m.span(), m.group(0), u) for m in r.finditer(sequence)]
-        for u, r in regex_patterns.items() if u in sequence
-    ])
-    if hits:
+def extract_longest_repeat_df(sequence, regex_patterns, min_rep_len=2,
+                              cut_end_len=0, start_pos=0):
+    hits = [
+        t for t in chain.from_iterable([
+            [(m.group(0), u, *m.span()) for m in r.finditer(sequence)]
+            for u, r in regex_patterns.items() if u in sequence
+        ]) if len(t[0]) >= min_rep_len
+    ]
+    if not hits:
+        return pd.DataFrame()
+    else:
         return pd.DataFrame(
-            hits, columns=['start_idx', 'end_idx', 'repeat_seq', 'repeat_unit']
+            hits, columns=['repeat_seq', 'repeat_unit', 'start_idx', 'end_idx']
         ).assign(
             repeat_seq_length=lambda d: d['end_idx'] - d['start_idx'],
             repeat_unit_length=lambda d: d['repeat_unit'].apply(len),
@@ -130,11 +138,9 @@ def extract_longest_repeat_df(sequence, regex_patterns, cut_end_len=0,
                 (d['start_idx'] >= cut_end_len) &
                 (d['end_idx'] <= len(sequence) - cut_end_len)
             ].drop(columns=['start_idx', 'end_idx'])
-        ).reset_index().pipe(
+        ).reset_index(drop=True).pipe(
             lambda d: d.iloc[[d['repeat_times'].idxmax()]]
         )
-    else:
-        return pd.DataFrame()
 
 
 def _print_state_line(res):
