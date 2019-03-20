@@ -33,8 +33,8 @@ def fetch_executable(cmd):
     return executables[0] if executables else None
 
 
-def print_log(message, prompt='>>>'):
-    print('{0}\t{1}'.format(prompt, message), flush=True)
+def print_log(message, prompt='>>>', end=os.linesep):
+    print('{0}\t{1}'.format(prompt, message), end=end, flush=True)
 
 
 def run_and_parse_subprocess(args, stdout=subprocess.PIPE,

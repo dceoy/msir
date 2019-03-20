@@ -3,6 +3,7 @@
 import bz2
 import gzip
 import io
+from itertools import chain, product
 import logging
 import os
 import subprocess
@@ -30,6 +31,25 @@ def read_bed(path):
     beddf = BedDataFrame(path=fetch_abspath(path=path))
     beddf.load()
     return beddf.df
+
+
+def iterate_unique_repeat_units(max_unit_len=6, bases='ACGT'):
+    patterns_by_ul = []
+    for ul in range(1, max_unit_len + 1):
+        if ul == 1:
+            patterns_by_ul.append(list(bases))
+        else:
+            unit_tuples_seen = []
+            for i in range(1, ul):
+                if ul % i == 0:
+                    unit_tuples_seen.extend([
+                        tuple(s * int(ul / i)) for s in patterns_by_ul[i - 1]
+                    ])
+            patterns_by_ul.append([
+                ''.join(t) for t in product(bases, repeat=ul)
+                if t not in unit_tuples_seen
+            ])
+    return chain.from_iterable(patterns_by_ul)
 
 
 def convert_bed_line_to_sam_region(bedline):

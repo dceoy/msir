@@ -2,15 +2,14 @@
 
 from collections import OrderedDict
 from concurrent.futures import as_completed, ProcessPoolExecutor
-from itertools import chain, product
+from itertools import chain
 import logging
 import os
 from pprint import pformat
 import re
-import numpy as np
 import pandas as pd
-from ..util.biotools import convert_bed_line_to_sam_region, read_fasta, \
-    read_bed
+from ..util.biotools import convert_bed_line_to_sam_region, \
+    iterate_unique_repeat_units, read_fasta, read_bed
 from ..util.helper import fetch_abspath, print_log, validate_files_and_dirs
 
 
@@ -23,10 +22,11 @@ def identify_repeat_units_on_bed(bed_path, genome_fa_path, ru_tsv_path,
         bed_path=bed_path, genome_fa_path=genome_fa_path,
         ex_region_len=ex_region_len
     )
-    print_log('Compile regular expression patterns:')
+    print_log('Compile regular expression patterns:', end='')
     regex_patterns = _compile_repeat_unit_regex_patterns(
         max_unit_len=max_unit_len, min_rep_times=min_rep_times
     )
+    print('\t{}'.format(len(regex_patterns)), flush=True)
     print_log('Identify repeat units on BED regions:')
     df_ru = _make_repeat_unit_df(
         df_exbed=df_exbed, regex_patterns=regex_patterns, n_proc=n_proc
@@ -59,18 +59,11 @@ def _make_extented_bed_df(bed_path, genome_fa_path, ex_region_len=10):
     return df_exbed
 
 
-def _compile_repeat_unit_regex_patterns(max_unit_len=6, min_rep_times=1,
-                                        n_proc=8, bases='ACGT'):
-    units = [
-        ''.join(t) for t in chain.from_iterable([
-            product(bases, repeat=i) for i in range(1, max_unit_len + 1)
-        ])
-    ]
-    patterns = OrderedDict([
-        (s, compile_str_regex(s, min_rep_times=min_rep_times)) for s in units
+def _compile_repeat_unit_regex_patterns(max_unit_len=6, min_rep_times=1):
+    return OrderedDict([
+        (s, compile_str_regex(s, min_rep_times=min_rep_times))
+        for s in iterate_unique_repeat_units(max_unit_len=max_unit_len)
     ])
-    print('  Patterns: {}'.format(len(patterns)), flush=True)
-    return patterns
 
 
 def compile_str_regex(repeat_unit, min_rep_times=1):
@@ -95,7 +88,7 @@ def _make_repeat_unit_df(df_exbed, regex_patterns, n_proc=8):
         raise e
     else:
         ppx.shutdown(wait=True)
-        df_ru = df_ru.reset_index().set_index('id').sort_index()
+        df_ru = df_ru.set_index('id').sort_index()
     finally:
         print(df_ru, flush=True)
     return df_ru
@@ -109,7 +102,7 @@ def _identify_repeat_unit(bedline, region_id, regex_patterns):
             cut_end_len=0, start_pos=bedline['chromStart']
         ).assign(
             id=region_id, **bedline
-        ).set_index(['id', *bedline.keys()])
+        ).set_index(['id', *bedline.keys()]).reset_index()
     }
 
 
@@ -123,20 +116,22 @@ def extract_longest_repeat_df(sequence, regex_patterns, cut_end_len=0,
         return pd.DataFrame(
             hits, columns=['start_idx', 'end_idx', 'repeat_seq', 'repeat_unit']
         ).assign(
-            repeat_seq_size=lambda d: d['end_idx'] - d['start_idx'],
-            repeat_unit_size=lambda d: d['repeat_unit'].apply(len),
+            repeat_seq_length=lambda d: d['end_idx'] - d['start_idx'],
+            repeat_unit_length=lambda d: d['repeat_unit'].apply(len),
             repeat_start=lambda d: d['start_idx'] + start_pos,
             repeat_end=lambda d: d['end_idx'] + start_pos
         ).assign(
             repeat_times=lambda d:
-            np.int32(d['repeat_seq_size'] / d['repeat_unit_size'])
+            (d['repeat_seq_length'] / d['repeat_unit_length']).astype(int)
         ).pipe(
-            lambda d: d.iloc[[d['repeat_seq_size'].idxmax()]]
+            lambda d: d[d['repeat_seq_length'] == d['repeat_seq_length'].max()]
         ).pipe(
             lambda d: d[
                 (d['start_idx'] >= cut_end_len) &
                 (d['end_idx'] <= len(sequence) - cut_end_len)
             ].drop(columns=['start_idx', 'end_idx'])
+        ).reset_index().pipe(
+            lambda d: d.iloc[[d['repeat_times'].idxmax()]]
         )
     else:
         return pd.DataFrame()
