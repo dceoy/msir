@@ -28,9 +28,7 @@ def read_fasta(path):
 
 
 def read_bed(path):
-    beddf = BedDataFrame(path=fetch_abspath(path=path))
-    beddf.load()
-    return beddf.df
+    return BedDataFrame(path=fetch_abspath(path=path)).load_and_output_df()
 
 
 def iterate_unique_repeat_units(max_unit_len=6, bases='ACGT'):

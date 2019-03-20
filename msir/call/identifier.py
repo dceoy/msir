@@ -72,42 +72,45 @@ def compile_str_regex(repeat_unit, min_rep_times=1):
 
 
 def _make_repeat_unit_df(df_exbed, regex_patterns, min_rep_len=10, n_proc=8):
+    logger = logging.getLogger(__name__)
     ppx = ProcessPoolExecutor(max_workers=n_proc)
     fs = [
         ppx.submit(
-            _identify_repeat_unit, bedline, id, regex_patterns,
-            min_rep_len
+            _identify_repeat_unit, bedline, id, regex_patterns, min_rep_len
         ) for id, bedline in df_exbed.iterrows()
     ]
-    df_ru = pd.DataFrame()
     try:
-        for f in as_completed(fs):
-            res = f.result()
-            _print_state_line(res=res)
-            df_ru = df_ru.append(res['df'])
+        df_ru = pd.concat([
+            f.result() for f in as_completed(fs)
+        ]).set_index('id').sort_index()
     except Exception as e:
         [f.cancel() for f in fs]
         ppx.shutdown(wait=False)
         raise e
     else:
         ppx.shutdown(wait=True)
-        df_ru = df_ru.set_index('id').sort_index()
     finally:
-        print(df_ru, flush=True)
+        logger.debug('df_ru:{0}{1}'.format(os.linesep, df_ru))
     return df_ru
 
 
 def _identify_repeat_unit(bedline, region_id, regex_patterns, min_rep_len):
-    return {
-        'region': convert_bed_line_to_sam_region(bedline),
-        'df': extract_longest_repeat_df(
-            sequence=bedline['search_seq'], regex_patterns=regex_patterns,
-            min_rep_len=min_rep_len, cut_end_len=0,
-            start_pos=bedline['chromStart']
-        ).assign(
-            id=region_id, **bedline
-        ).set_index(['id', *bedline.keys()]).reset_index()
-    }
+    bed_cols = ['chrom', 'chromStart', 'chromEnd']
+    ex_cols = ['search_start', 'search_end', 'search_seq']
+    df_line = extract_longest_repeat_df(
+        sequence=bedline['search_seq'], regex_patterns=regex_patterns,
+        min_rep_len=min_rep_len, cut_end_len=0,
+        start_pos=bedline['chromStart']
+    ).pipe(
+        lambda d: d.assign(
+            id=region_id,
+            **{k: v for k, v in bedline.items() if k in (bed_cols + ex_cols)}
+        )[['id', *bed_cols, *d.columns, *ex_cols]]
+    )
+    _print_state_line(
+        region=convert_bed_line_to_sam_region(bedline), df_line=df_line
+    )
+    return df_line
 
 
 def extract_longest_repeat_df(sequence, regex_patterns, min_rep_len=2,
@@ -121,13 +124,13 @@ def extract_longest_repeat_df(sequence, regex_patterns, min_rep_len=2,
     if not hits:
         return pd.DataFrame()
     else:
-        return pd.DataFrame(
+        df_lr = pd.DataFrame(
             hits, columns=['repeat_seq', 'repeat_unit', 'start_idx', 'end_idx']
         ).assign(
-            repeat_seq_length=lambda d: d['end_idx'] - d['start_idx'],
-            repeat_unit_length=lambda d: d['repeat_unit'].apply(len),
             repeat_start=lambda d: d['start_idx'] + start_pos,
-            repeat_end=lambda d: d['end_idx'] + start_pos
+            repeat_end=lambda d: d['end_idx'] + start_pos,
+            repeat_seq_length=lambda d: d['end_idx'] - d['start_idx'],
+            repeat_unit_length=lambda d: d['repeat_unit'].apply(len)
         ).assign(
             repeat_times=lambda d:
             (d['repeat_seq_length'] / d['repeat_unit_length']).astype(int)
@@ -138,15 +141,18 @@ def extract_longest_repeat_df(sequence, regex_patterns, min_rep_len=2,
                 (d['start_idx'] >= cut_end_len) &
                 (d['end_idx'] <= len(sequence) - cut_end_len)
             ].drop(columns=['start_idx', 'end_idx'])
-        ).reset_index(drop=True).pipe(
-            lambda d: d.iloc[[d['repeat_times'].idxmax()]]
+        )
+        return (
+            df_lr.reset_index(drop=True).pipe(
+                lambda d: d.iloc[[d['repeat_times'].idxmax()]]
+            ) if df_lr.size else pd.DataFrame()
         )
 
 
-def _print_state_line(res):
-    d = res['df'].iloc[0].to_dict() if res['df'].size else dict()
+def _print_state_line(region, df_line):
+    d = df_line.iloc[0].to_dict() if df_line.size else dict()
     line = '  {0:<25}\t{1:<10}\t{2}'.format(
-        res['region'],
+        region,
         ('{0}x{1}'.format(d['repeat_times'], d['repeat_unit']) if d else '-'),
         (d['repeat_seq'] if d else '-')
     )
