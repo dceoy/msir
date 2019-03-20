@@ -10,26 +10,30 @@ from ..util.biotools import convert_bed_line_to_sam_region, \
 from .identifier import compile_str_regex, extract_longest_repeat_df
 
 
-def scan_tandem_repeats_in_reads(bam_paths, ru_tsv_path, result_tsv_path,
+def scan_tandem_repeats_in_reads(bam_paths, trunit_tsv_path, hist_tsv_path,
                                  index_bam=False, samtools=None,
                                  cut_end_len=10, n_proc=8):
-    validate_files_and_dirs(files=[ru_tsv_path, *bam_paths])
+    validate_files_and_dirs(files=[trunit_tsv_path, *bam_paths])
     validate_or_prepare_bam_indexes(
         bam_paths=bam_paths, index_bam=index_bam, n_proc=n_proc,
         samtools_path=samtools
     )
-    print_log('Load repeat units data:\t{}'.format(ru_tsv_path))
-    df_ru = pd.read_csv(ru_tsv_path, sep='\t')
+    print_log('Load repeat units data:\t{}'.format(trunit_tsv_path))
+    df_ru = pd.read_csv(trunit_tsv_path, sep='\t')
     print_log('Compile regular expression patterns:')
     regex_patterns = _compile_repeat_unit_regex_patterns_from_df(df=df_ru)
-    for p in bam_paths:
+    tsv_abspath = fetch_abspath(hist_tsv_path)
+    for i, p in enumerate(bam_paths):
         print_log('Extract tandem repeats within reads:\t{}'.format(p))
         df_hist = _extract_repeats_within_reads(
             bam_path=p, regex_patterns=regex_patterns, df_ru=df_ru,
             cut_end_len=cut_end_len, samtools=samtools, n_proc=n_proc
         )
-        print_log('Write results into:\t{}'.format(result_tsv_path))
-        _write_result_tsv(df=df_hist, tsv_path=result_tsv_path, bam_path=p)
+        print_log('Write repeat counts data:\t{}'.format(hist_tsv_path))
+        df_hist.to_csv(
+            tsv_abspath, header=(not i), mode=('a' if i else 'w'),
+            sep=(',' if tsv_abspath.endswith('.csv') else '\t')
+        )
     print_log('All the processes done.')
 
 
@@ -53,9 +57,9 @@ def _extract_repeats_within_reads(bam_path, regex_patterns, df_ru, cut_end_len,
         ) for id, line in df_ru.iterrows()
     ]
     try:
-        df_hist = pd.concat([
-            f.result() for f in as_completed(fs)
-        ]).set_index('id').sort_index()
+        df_hist = pd.concat(
+            [f.result() for f in as_completed(fs)], sort=False
+        ).sort_values(by='id').drop(columns='id')
     except Exception as e:
         [f.cancel() for f in fs]
         ppx.shutdown(wait=False)
@@ -89,21 +93,22 @@ def _count_repeats_in_reads(bam_path, tsvline, id, regex_patterns, cut_end_len,
         if df.size:
             line_df_list.append(df)
     if line_df_list:
-        df_bam = pd.concat(line_df_list)
+        df_bam = pd.concat(line_df_list, sort=False)
         logger.debug('df_bam:{0}{1}'.format(os.linesep, df_bam))
-        df_hist = ['repeat_times'].value_counts().to_frame(
+        df_hist = df_bam['repeat_times'].value_counts().to_frame(
             name='observed_repeat_times_count'
         ).reset_index().rename(
             columns={'index': 'observed_repeat_times'}
         ).assign(
-            id=id, sam_region=region, ref_repeat_times=tsvline['repeat_times'],
+            id=id, data_path=bam_path, sam_region=region,
+            ref_repeat_times=tsvline['repeat_times'],
             **{k: tsvline[k] for k in bed_cols}, repeat_unit=ru
         ).sort_values(
             'observed_repeat_times_count', ascending=False
-        )[[
-            'id', *bed_cols, 'sam_region', 'repeat_unit', 'ref_repeat_times',
-            'observed_repeat_times', 'observed_repeat_times_count'
-        ]]
+        ).set_index([
+            'data_path', *bed_cols, 'sam_region', 'repeat_unit',
+            'ref_repeat_times', 'observed_repeat_times'
+        ]).sort_index()
         _print_state_line(region=region, df_hist=df_hist, bam_path=bam_path)
     else:
         df_hist = pd.DataFrame()
@@ -111,22 +116,10 @@ def _count_repeats_in_reads(bam_path, tsvline, id, regex_patterns, cut_end_len,
 
 
 def _print_state_line(region, df_hist, bam_path):
-    for i, r in df_hist.iterrows():
+    for i, r in df_hist.reset_index().iterrows():
         line = '  {0}\t{1:<25}\t{2:<10}\t{3}'.format(
             os.path.basename(bam_path), region,
             '{0}x{1}'.format(r['observed_repeat_times'], r['repeat_unit']),
             r['observed_repeat_times_count']
         )
         print(line, flush=True)
-
-
-def _write_result_tsv(df, tsv_path, bam_path):
-    tsv_abspath = fetch_abspath(tsv_path)
-    tsv_exists = os.path.isfile(tsv_abspath)
-    df.pipe(
-        lambda d: d.assign(data_path=bam_path)[['data_path', *d.columns]]
-    ).to_csv(
-        tsv_abspath, index=False, header=(not tsv_exists),
-        mode=('a' if tsv_exists else 'w'),
-        sep=(',' if tsv_path.endswith('.csv') else '\t')
-    )

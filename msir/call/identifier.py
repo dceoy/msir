@@ -13,7 +13,7 @@ from ..util.biotools import convert_bed_line_to_sam_region, \
 from ..util.helper import fetch_abspath, print_log, validate_files_and_dirs
 
 
-def identify_repeat_units_on_bed(bed_path, genome_fa_path, ru_tsv_path,
+def identify_repeat_units_on_bed(bed_path, genome_fa_path, trunit_tsv_path,
                                  max_unit_len=6, min_rep_times=3,
                                  min_rep_len=10, ex_region_len=10, n_proc=8):
     validate_files_and_dirs(files=[bed_path, genome_fa_path])
@@ -32,8 +32,8 @@ def identify_repeat_units_on_bed(bed_path, genome_fa_path, ru_tsv_path,
         df_exbed=df_exbed, regex_patterns=regex_patterns,
         min_rep_len=min_rep_len, n_proc=n_proc
     )
-    print_log('Write repeat units data:\t{}'.format(ru_tsv_path))
-    df_ru.to_csv(fetch_abspath(ru_tsv_path), index=False, sep='\t')
+    print_log('Write repeat units data:\t{}'.format(trunit_tsv_path))
+    df_ru.to_csv(fetch_abspath(trunit_tsv_path), sep='\t')
 
 
 def _make_extented_bed_df(bed_path, genome_fa_path, ex_region_len=10):
@@ -43,7 +43,9 @@ def _make_extented_bed_df(bed_path, genome_fa_path, ex_region_len=10):
     seq_lengths = {k: len(v.seq) for k, v in ref_genome.items()}
     logger.debug('seq_lengths:' + os.linesep + pformat(seq_lengths))
     print('  BED:\t{}'.format(bed_path), flush=True)
-    df_exbed = read_bed(path=bed_path).assign(
+    df_exbed = read_bed(
+        path=bed_path
+    )[['chrom', 'chromStart', 'chromEnd']].assign(
         search_start=lambda d: d['chromStart'].apply(
             lambda i: max(0, i - ex_region_len)
         ),
@@ -80,9 +82,13 @@ def _make_repeat_unit_df(df_exbed, regex_patterns, min_rep_len=10, n_proc=8):
         ) for id, bedline in df_exbed.iterrows()
     ]
     try:
-        df_ru = pd.concat([
-            f.result() for f in as_completed(fs)
-        ]).set_index('id').sort_index()
+        df_ru = pd.concat(
+            [f.result() for f in as_completed(fs)], sort=False
+        ).sort_values(by='id').drop(columns='id')[[
+            'repeat_start', 'repeat_end', 'repeat_unit', 'repeat_unit_length',
+            'repeat_times', 'repeat_seq', 'repeat_seq_length', 'search_start',
+            'search_end', 'search_seq'
+        ]]
     except Exception as e:
         [f.cancel() for f in fs]
         ppx.shutdown(wait=False)
@@ -95,22 +101,18 @@ def _make_repeat_unit_df(df_exbed, regex_patterns, min_rep_len=10, n_proc=8):
 
 
 def _identify_repeat_unit(bedline, region_id, regex_patterns, min_rep_len):
-    bed_cols = ['chrom', 'chromStart', 'chromEnd']
-    ex_cols = ['search_start', 'search_end', 'search_seq']
     df_line = extract_longest_repeat_df(
         sequence=bedline['search_seq'], regex_patterns=regex_patterns,
-        min_rep_len=min_rep_len, cut_end_len=0,
-        start_pos=bedline['chromStart']
-    ).pipe(
-        lambda d: d.assign(
-            id=region_id,
-            **{k: v for k, v in bedline.items() if k in (bed_cols + ex_cols)}
-        )[['id', *bed_cols, *d.columns, *ex_cols]]
+        min_rep_len=min_rep_len, cut_end_len=0, start_pos=bedline['chromStart']
     )
     _print_state_line(
         region=convert_bed_line_to_sam_region(bedline), df_line=df_line
     )
-    return df_line
+    return (
+        df_line.assign(id=region_id, **bedline).set_index([
+            'chrom', 'chromStart', 'chromEnd'
+        ]).sort_index() if df_line.size else df_line
+    )
 
 
 def extract_longest_repeat_df(sequence, regex_patterns, min_rep_len=2,
