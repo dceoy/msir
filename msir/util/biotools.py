@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import bz2
+from collections import OrderedDict
 import gzip
 import io
 from itertools import chain, product
@@ -125,4 +126,4 @@ def _parse_sam_line(line):
     col_dtypes = {k: (fixed_col_dtypes.get(k) or str) for k in cols}
     return pd.read_csv(
         io.StringIO(line), header=None, names=cols, dtype=col_dtypes, sep='\t'
-    ).iloc[0].to_dict()
+    ).iloc[0].to_dict(orient='index', into=OrderedDict)

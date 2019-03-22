@@ -20,8 +20,9 @@ def scan_tandem_repeats_in_reads(bam_paths, trunit_tsv_path, hist_tsv_path,
     )
     print_log('Load repeat units data:\t{}'.format(trunit_tsv_path))
     df_ru = pd.read_csv(trunit_tsv_path, sep='\t')
-    print_log('Compile regular expression patterns:')
+    print_log('Compile regular expression patterns:', end='')
     regex_patterns = _compile_repeat_unit_regex_patterns_from_df(df=df_ru)
+    print('\t{}'.format(len(regex_patterns)), flush=True)
     tsv_abspath = fetch_abspath(hist_tsv_path)
     for i, p in enumerate(bam_paths):
         print_log('Extract tandem repeats within reads:\t{}'.format(p))
@@ -38,12 +39,10 @@ def scan_tandem_repeats_in_reads(bam_paths, trunit_tsv_path, hist_tsv_path,
 
 
 def _compile_repeat_unit_regex_patterns_from_df(df):
-    patterns = {
+    return {
         s: compile_str_regex(repeat_unit=s, min_rep_times=1)
         for s in set(df['repeat_unit'])
     }
-    print('  Patterns: {}'.format(len(patterns)), flush=True)
-    return patterns
 
 
 def _extract_repeats_within_reads(bam_path, regex_patterns, df_ru, cut_end_len,
