@@ -3,12 +3,17 @@
 Tandem repeat analyzer for microsatellite instability detection by DNA-seq
 
 Usage:
-    msir id [--debug] [--max-unit-len=<int>] [--min-rep-times=<int>]
-            [--min-rep-len=<int>] [--ex-region-len=<int>] [--processes=<int>]
-            [--unit-tsv=<path>] <bed> <fasta>
+    msir id [--debug] [--unit-tsv=<path>] [--max-unit-len=<int>]
+            [--min-rep-times=<int>] [--min-rep-len=<int>]
+            [--ex-region-len=<int>] [--processes=<int>] <bed> <fasta>
     msir hist [--debug] [--unit-tsv=<path>] [--hist-tsv=<path>] [--index-bam]
               [--samtools=<path>] [--cut-end-len=<int>] [--processes=<int>]
               <bam>...
+    msir pipeline [--debug] [--max-unit-len=<int>] [--min-rep-times=<int>]
+                  [--min-rep-len=<int>] [--ex-region-len=<int>]
+                  [--cut-end-len=<int>] [--index-bam] [--samtools=<path>]
+                  [--processes=<int>] [--unit-tsv=<path>] [--hist-tsv=<path>]
+                  <bed> <fasta> <bam>...
     msir -h|--help
     msir -v|--version
 
@@ -16,7 +21,7 @@ Options:
     -h, --help              Print help and exit
     -v, --version           Print version and exit
     --debug                 Execute a command with debug messages
-    --max-unit-len=<int>    Set a maximum length for repeat units [default: 10]
+    --max-unit-len=<int>    Set a maximum length for repeat units [default: 8]
     --min-rep-times=<int>   Set a minimum repeat times [default: 2]
     --min-rep-len=<int>     Set a minimum length for repeats [default: 5]
     --ex-region-len=<int>   Search around extra regions [default: 20]
@@ -35,6 +40,7 @@ Arguments:
 Commands:
     id                      Indentify repeat units from reference sequences
     hist                    Extract and count tandem repeats in read sequences
+    pipeline                Execute both of id and hist commands
 """
 
 import logging
@@ -59,14 +65,7 @@ def main():
     n_proc = int(args['--processes'] or cpu_count())
     logger.debug('n_proc: {}'.format(n_proc))
     signal.signal(signal.SIGINT, signal.SIG_DFL)
-    if args['hist']:
-        scan_tandem_repeats_in_reads(
-            bam_paths=args['<bam>'], trunit_tsv_path=args['--unit-tsv'],
-            hist_tsv_path=args['--hist-tsv'], index_bam=args['--index-bam'],
-            samtools=args['--samtools'],
-            cut_end_len=int(args['--cut-end-len']), n_proc=n_proc
-        )
-    elif args['id']:
+    if args['id'] or args['pipeline']:
         identify_repeat_units_on_bed(
             bed_path=args['<bed>'], genome_fa_path=args['<fasta>'],
             trunit_tsv_path=args['--unit-tsv'],
@@ -75,4 +74,11 @@ def main():
             min_rep_len=int(args['--min-rep-len']),
             ex_region_len=int(args['--ex-region-len']),
             n_proc=n_proc
+        )
+    if args['hist'] or args['pipeline']:
+        scan_tandem_repeats_in_reads(
+            bam_paths=args['<bam>'], trunit_tsv_path=args['--unit-tsv'],
+            hist_tsv_path=args['--hist-tsv'], index_bam=args['--index-bam'],
+            samtools=args['--samtools'],
+            cut_end_len=int(args['--cut-end-len']), n_proc=n_proc
         )
