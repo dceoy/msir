@@ -95,7 +95,6 @@ def _make_repeat_unit_df(df_exbed, regex_patterns, min_rep_len=10, n_proc=8):
         raise e
     else:
         ppx.shutdown(wait=True)
-    finally:
         logger.debug('df_ru:{0}{1}'.format(os.linesep, df_ru))
     return df_ru
 
