@@ -6,13 +6,13 @@ Usage:
     msir id [--debug] [--unit-tsv=<path>] [--max-unit-len=<int>]
             [--min-rep-times=<int>] [--min-rep-len=<int>]
             [--ex-region-len=<int>] [--processes=<int>] <bed> <fasta>
-    msir hist [--debug] [--unit-tsv=<path>] [--hist-tsv=<path>] [--index-bam]
-              [--samtools=<path>] [--cut-end-len=<int>] [--processes=<int>]
-              <bam>...
+    msir detect [--debug] [--unit-tsv=<path>] [--obs-tsv=<path>][--index-bam]
+                [--samtools=<path>] [--cut-end-len=<int>] [--processes=<int>]
+                <bam>...
     msir pipeline [--debug] [--max-unit-len=<int>] [--min-rep-times=<int>]
                   [--min-rep-len=<int>] [--ex-region-len=<int>]
                   [--cut-end-len=<int>] [--index-bam] [--samtools=<path>]
-                  [--processes=<int>] [--unit-tsv=<path>] [--hist-tsv=<path>]
+                  [--processes=<int>] [--unit-tsv=<path>] [--obs-tsv=<path>]
                   <bed> <fasta> <bam>...
     msir -h|--help
     msir -v|--version
@@ -26,21 +26,21 @@ Options:
     --min-rep-len=<int>     Set a minimum length for repeats [default: 5]
     --ex-region-len=<int>   Search around extra regions [default: 20]
     --processes=<int>       Limit max cores for multiprocessing
-    --unit-tsv=<path>       Set a repeat unit TSV file [default: tr_unit.tsv]
-    --hist-tsv=<path>       Set a repeat count TSV file [default: tr_hist.tsv]
-    --index-bam             Index BAM or CRAM files if required
+    --unit-tsv=<path>       Set a TSV of repeat units [default: tr_unit.tsv]
+    --obs-tsv=<path>        Set a TSV of observed repeats [default: tr_obs.tsv]
+    --index-bam             Index BAM or CRAM if required
     --samtools=<path>       Set a path to samtools command
     --cut-end-len=<int>     Ignore repeats on ends of reads [default: 10]
 
 Arguments:
     <bed>                   Path to a BED file of repetitive regions
-    <fasta>                 Path to a reference genome fasta file
+    <fasta>                 Path to a reference genome FASTA file
     <bam>                   Path to an input BAM/CRAM file
 
 Commands:
     id                      Indentify repeat units from reference sequences
-    hist                    Extract and count tandem repeats in read sequences
-    pipeline                Execute both of id and hist commands
+    detect                  Detect tandem repeats within read sequences
+    pipeline                Execute both of the above commands
 """
 
 import logging
@@ -50,7 +50,7 @@ import signal
 from docopt import docopt
 from .. import __version__
 from ..call.identifier import identify_repeat_units_on_bed
-from ..call.scanner import scan_tandem_repeats_in_reads
+from ..call.detector import detect_tandem_repeats_in_reads
 
 
 def main():
@@ -75,10 +75,10 @@ def main():
             ex_region_len=int(args['--ex-region-len']),
             n_proc=n_proc
         )
-    if args['hist'] or args['pipeline']:
-        scan_tandem_repeats_in_reads(
+    if args['detect'] or args['pipeline']:
+        detect_tandem_repeats_in_reads(
             bam_paths=args['<bam>'], trunit_tsv_path=args['--unit-tsv'],
-            hist_tsv_path=args['--hist-tsv'], index_bam=args['--index-bam'],
+            obs_tsv_path=args['--obs-tsv'], index_bam=args['--index-bam'],
             samtools=args['--samtools'],
             cut_end_len=int(args['--cut-end-len']), n_proc=n_proc
         )

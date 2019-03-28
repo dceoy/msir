@@ -21,10 +21,10 @@ Usage
     $ msir id --unit-tsv=./repeat_units.tsv ./microsatellite.bed ./hg38.fa
     ```
 
-2.  Extract and count tandem repeats within read sequences in BAM files and write them into a TSV file.
+2.  Detect tandem repeats within read sequences in BAM files and write them into a TSV file.
 
     ```sh
-    $ msir hist --hist-tsv=./repeat_counts.tsv --unit-tsv=./repeat_units.tsv sample1.bam sample2.bam
+    $ msir detect --obs-tsv=./repeat_counts.tsv --unit-tsv=./repeat_units.tsv sample1.bam sample2.bam
     ```
 
 Run `msir --help` for more information about options.
