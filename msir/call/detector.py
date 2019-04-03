@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from collections import OrderedDict
 from concurrent.futures import as_completed, ProcessPoolExecutor
 import logging
 import os
@@ -74,6 +75,10 @@ def _count_repeats_in_reads(bam_path, tsvline, id, regex_patterns, cut_end_len,
                             samtools):
     logger = logging.getLogger(__name__)
     bed_cols = ['chrom', 'chromStart', 'chromEnd']
+    sam_cols = [
+        'QNAME', 'FLAG', 'RNAME', 'POS', 'MAPQ', 'CIGAR', 'RNEXT', 'PNEXT',
+        'TLEN', 'SEQ', 'QUAL'
+    ]
     ru = tsvline['repeat_unit']
     region = convert_bed_line_to_sam_region(tsvline)
     logger.debug('region: {}'.format(region))
@@ -90,11 +95,10 @@ def _count_repeats_in_reads(bam_path, tsvline, id, regex_patterns, cut_end_len,
             cut_end_len=cut_end_len, start_pos=d['POS']
         )
         if df.size:
-            line_df_list.append(df.assign(**d))
+            sam_od = OrderedDict([(k, d[k]) for k in sam_cols])
+            line_df_list.append(df.assign(**sam_od))
     if line_df_list:
-        df_bam = pd.concat(line_df_list, sort=False)
-        logger.debug('df_bam:{0}{1}'.format(os.linesep, df_bam))
-        df_obs = df_bam.rename(
+        df_obs = pd.concat(line_df_list, sort=False).rename(
             columns={'repeat_times': 'observed_repeat_times'}
         ).assign(
             id=id, data_path=bam_path, sam_region=region,
@@ -102,8 +106,9 @@ def _count_repeats_in_reads(bam_path, tsvline, id, regex_patterns, cut_end_len,
             **{k: tsvline[k] for k in bed_cols}, repeat_unit=ru
         ).set_index([
             'data_path', *bed_cols, 'sam_region', 'repeat_unit',
-            'ref_repeat_times', 'observed_repeat_times'
+            'ref_repeat_times'
         ]).sort_index()
+        logger.debug('df_obs:{0}{1}'.format(os.linesep, df_obs))
         _print_state_line(region=region, df_obs=df_obs, bam_path=bam_path)
     else:
         df_obs = pd.DataFrame()
@@ -111,16 +116,14 @@ def _count_repeats_in_reads(bam_path, tsvline, id, regex_patterns, cut_end_len,
 
 
 def _print_state_line(region, df_obs, bam_path):
-    row1 = df_obs.reset_index().iloc[0].to_dict()
-    data_name = os.path.basename(row1['data_path'])
-    region = row1['sam_region']
-    repeat_unit = row1['repeat_unit']
+    bam_name = os.path.basename(bam_path)
+    ru = df_obs.reset_index()['repeat_unit'].iloc[0]
     df_hist = df_obs['observed_repeat_times'].value_counts().to_frame(
         name='observed_repeat_times_count'
     )
     for i, r in df_hist.iterrows():
         line = '  {0}\t{1:<25}\t{2:<10}\t{3}'.format(
-            data_name, region, '{0}x{1}'.format(i, repeat_unit),
+            bam_name, region, '{0}x{1}'.format(i, ru),
             r['observed_repeat_times_count']
         )
         print(line, flush=True)

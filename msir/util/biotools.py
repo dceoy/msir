@@ -80,6 +80,7 @@ def validate_or_prepare_bam_indexes(bam_paths, index_bam=False, n_proc=8,
                 args = [samtools, 'index', '-@', str(n_proc), fetch_abspath(p)]
                 logger.debug('args: {}'.format(args))
                 subprocess.run(args=args, check=True)
+                print(p + '.bai', flush=True)
         else:
             raise FileNotFoundError(
                 'BAM/CRAM indexes not found: {}'.format(
