@@ -98,17 +98,22 @@ def _count_repeats_in_reads(bam_path, tsvline, id, regex_patterns,
         )
         if df.size:
             sam_od = OrderedDict([(k, d[k]) for k in sam_cols])
-            line_df_list.append(df.assign(**sam_od))
+            line_df_list.append(df.drop(columns='repeat_seq').assign(**sam_od))
     if line_df_list:
         df_obs = pd.concat(line_df_list, sort=False).rename(
-            columns={'repeat_times': 'observed_repeat_times'}
+            columns={
+                'repeat_start': 'observed_repeat_start',
+                'repeat_end': 'observed_repeat_end',
+                'repeat_seq_length': 'observed_repeat_seq_length',
+                'repeat_times': 'observed_repeat_times'
+            }
         ).assign(
             id=id, data_path=bam_path, sam_region=region,
             ref_repeat_times=tsvline['repeat_times'],
-            **{k: tsvline[k] for k in bed_cols}, repeat_unit=ru
+            **{k: tsvline[k] for k in bed_cols}
         ).set_index([
             'data_path', *bed_cols, 'sam_region', 'repeat_unit',
-            'ref_repeat_times'
+            'repeat_unit_length', 'ref_repeat_times'
         ]).sort_index()
         logger.debug('df_obs:{0}{1}'.format(os.linesep, df_obs))
         _print_state_line(region=region, df_obs=df_obs, bam_path=bam_path)
@@ -120,12 +125,9 @@ def _count_repeats_in_reads(bam_path, tsvline, id, regex_patterns,
 def _print_state_line(region, df_obs, bam_path):
     bam_name = os.path.basename(bam_path)
     ru = df_obs.reset_index()['repeat_unit'].iloc[0]
-    df_hist = df_obs['observed_repeat_times'].value_counts().to_frame(
-        name='observed_repeat_times_count'
-    )
+    df_hist = df_obs['observed_repeat_times'].value_counts().to_frame(name='c')
     for i, r in df_hist.iterrows():
         line = '  {0}\t{1:<25}\t{2:<10}\t{3}'.format(
-            bam_name, region, '{0}x{1}'.format(i, ru),
-            r['observed_repeat_times_count']
+            bam_name, region, '{0}x{1}'.format(i, ru), r['c']
         )
         print(line, flush=True)
