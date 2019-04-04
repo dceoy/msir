@@ -7,13 +7,13 @@ Usage:
             [--min-rep-times=<int>] [--min-rep-len=<int>]
             [--ex-region-len=<int>] [--processes=<int>] <bed> <fasta>
     msir detect [--debug] [--unit-tsv=<path>] [--obs-tsv=<path>][--index-bam]
-                [--samtools=<path>] [--cut-end-len=<int>] [--processes=<int>]
-                <bam>...
-    msir pipeline [--debug] [--max-unit-len=<int>] [--min-rep-times=<int>]
+                [--append-read-seq] [--cut-end-len=<int>] [--samtools=<path>]
+                [--processes=<int>] <bam>...
+    msir pipeline [--debug] [--unit-tsv=<path>] [--obs-tsv=<path>]
+                  [--index-bam] [--max-unit-len=<int>] [--min-rep-times=<int>]
                   [--min-rep-len=<int>] [--ex-region-len=<int>]
-                  [--cut-end-len=<int>] [--index-bam] [--samtools=<path>]
-                  [--processes=<int>] [--unit-tsv=<path>] [--obs-tsv=<path>]
-                  <bed> <fasta> <bam>...
+                  [--cut-end-len=<int>] [--append-read-seq] [--samtools=<path>]
+                  [--processes=<int>] <bed> <fasta> <bam>...
     msir -h|--help
     msir -v|--version
 
@@ -29,8 +29,9 @@ Options:
     --unit-tsv=<path>       Set a TSV of repeat units [default: tr_unit.tsv]
     --obs-tsv=<path>        Set a TSV of observed repeats [default: tr_obs.tsv]
     --index-bam             Index BAM or CRAM if required
-    --samtools=<path>       Set a path to samtools command
+    --append-read-seq       Append SEQ and QUAL of SAM data into an output TSV
     --cut-end-len=<int>     Ignore repeats on ends of reads [default: 10]
+    --samtools=<path>       Set a path to samtools command
 
 Arguments:
     <bed>                   Path to a BED file of repetitive regions
@@ -69,16 +70,16 @@ def main():
         identify_repeat_units_on_bed(
             bed_path=args['<bed>'], genome_fa_path=args['<fasta>'],
             trunit_tsv_path=args['--unit-tsv'],
-            max_unit_len=int(args['--max-unit-len']),
-            min_rep_times=int(args['--min-rep-times']),
-            min_rep_len=int(args['--min-rep-len']),
-            ex_region_len=int(args['--ex-region-len']),
-            n_proc=n_proc
+            max_unit_len=args['--max-unit-len'],
+            min_rep_times=args['--min-rep-times'],
+            min_rep_len=args['--min-rep-len'],
+            ex_region_len=args['--ex-region-len'], n_proc=n_proc
         )
     if args['detect'] or args['pipeline']:
         detect_tandem_repeats_in_reads(
             bam_paths=args['<bam>'], trunit_tsv_path=args['--unit-tsv'],
             obs_tsv_path=args['--obs-tsv'], index_bam=args['--index-bam'],
-            samtools=args['--samtools'],
-            cut_end_len=int(args['--cut-end-len']), n_proc=n_proc
+            append_read_seq=args['--append-read-seq'],
+            cut_end_len=args['--cut-end-len'], samtools=args['--samtools'],
+            n_proc=n_proc
         )

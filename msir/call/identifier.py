@@ -20,17 +20,17 @@ def identify_repeat_units_on_bed(bed_path, genome_fa_path, trunit_tsv_path,
     print_log('Load input data:')
     df_exbed = _make_extented_bed_df(
         bed_path=bed_path, genome_fa_path=genome_fa_path,
-        ex_region_len=ex_region_len
+        ex_region_len=int(ex_region_len)
     )
     print_log('Compile regular expression patterns:', end='')
     regex_patterns = _compile_repeat_unit_regex_patterns(
-        max_unit_len=max_unit_len, min_rep_times=min_rep_times
+        max_unit_len=int(max_unit_len), min_rep_times=int(min_rep_times)
     )
     print('\t{}'.format(len(regex_patterns)), flush=True)
     print_log('Identify repeat units on BED regions:')
     df_ru = _make_repeat_unit_df(
         df_exbed=df_exbed, regex_patterns=regex_patterns,
-        min_rep_len=min_rep_len, n_proc=n_proc
+        min_rep_len=int(min_rep_len), n_proc=n_proc
     )
     print_log('Write repeat units data:\t{}'.format(trunit_tsv_path))
     df_ru.to_csv(fetch_abspath(trunit_tsv_path), sep='\t')

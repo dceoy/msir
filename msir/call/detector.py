@@ -12,8 +12,8 @@ from .identifier import compile_str_regex, extract_longest_repeat_df
 
 
 def detect_tandem_repeats_in_reads(bam_paths, trunit_tsv_path, obs_tsv_path,
-                                   index_bam=False, samtools=None,
-                                   cut_end_len=10, n_proc=8):
+                                   index_bam=False, append_read_seq=False,
+                                   cut_end_len=10, samtools=None, n_proc=8):
     validate_files_and_dirs(files=[trunit_tsv_path, *bam_paths])
     validate_or_prepare_bam_indexes(
         bam_paths=bam_paths, index_bam=index_bam, n_proc=n_proc,
@@ -29,7 +29,8 @@ def detect_tandem_repeats_in_reads(bam_paths, trunit_tsv_path, obs_tsv_path,
         print_log('Detect tandem repeats within reads:\t{}'.format(p))
         df_obs = _extract_repeats_within_reads(
             bam_path=p, regex_patterns=regex_patterns, df_ru=df_ru,
-            cut_end_len=cut_end_len, samtools=samtools, n_proc=n_proc
+            cut_end_len=int(cut_end_len), append_read_seq=append_read_seq,
+            samtools=samtools, n_proc=n_proc
         )
         print_log('Write repeat counts data:\t{}'.format(obs_tsv_path))
         df_obs.to_csv(
@@ -46,14 +47,15 @@ def _compile_repeat_unit_regex_patterns_from_df(df):
     }
 
 
-def _extract_repeats_within_reads(bam_path, regex_patterns, df_ru, cut_end_len,
-                                  samtools, n_proc=8):
+def _extract_repeats_within_reads(bam_path, regex_patterns, df_ru,
+                                  append_read_seq, cut_end_len, samtools,
+                                  n_proc=8):
     logger = logging.getLogger(__name__)
     ppx = ProcessPoolExecutor(max_workers=n_proc)
     fs = [
         ppx.submit(
             _count_repeats_in_reads, bam_path, line, id, regex_patterns,
-            cut_end_len, samtools
+            append_read_seq, cut_end_len, samtools
         ) for id, line in df_ru.iterrows()
     ]
     try:
@@ -71,13 +73,13 @@ def _extract_repeats_within_reads(bam_path, regex_patterns, df_ru, cut_end_len,
     return df_obs
 
 
-def _count_repeats_in_reads(bam_path, tsvline, id, regex_patterns, cut_end_len,
-                            samtools):
+def _count_repeats_in_reads(bam_path, tsvline, id, regex_patterns,
+                            append_read_seq, cut_end_len, samtools):
     logger = logging.getLogger(__name__)
     bed_cols = ['chrom', 'chromStart', 'chromEnd']
     sam_cols = [
         'QNAME', 'FLAG', 'RNAME', 'POS', 'MAPQ', 'CIGAR', 'RNEXT', 'PNEXT',
-        'TLEN', 'SEQ', 'QUAL'
+        'TLEN', *(['SEQ', 'QUAL'] if append_read_seq else [])
     ]
     ru = tsvline['repeat_unit']
     region = convert_bed_line_to_sam_region(tsvline)
