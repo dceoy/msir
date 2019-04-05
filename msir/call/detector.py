@@ -108,12 +108,12 @@ def _count_repeats_in_reads(bam_path, tsvline, id, regex_patterns,
                 'repeat_times': 'observed_repeat_times'
             }
         ).assign(
-            id=id, data_path=bam_path, sam_region=region,
-            ref_repeat_times=tsvline['repeat_times'],
+            id=id, sam_path=bam_path, sam_region=region,
+            referenced_repeat_times=tsvline['repeat_times'],
             **{k: tsvline[k] for k in bed_cols}
         ).set_index([
-            'data_path', *bed_cols, 'sam_region', 'repeat_unit',
-            'repeat_unit_length', 'ref_repeat_times'
+            'sam_path', *bed_cols, 'sam_region', 'repeat_unit',
+            'repeat_unit_length', 'referenced_repeat_times'
         ]).sort_index()
         logger.debug('df_obs:{0}{1}'.format(os.linesep, df_obs))
         _print_state_line(region=region, df_obs=df_obs, bam_path=bam_path)
