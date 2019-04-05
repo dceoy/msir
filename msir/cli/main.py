@@ -5,15 +5,17 @@ Tandem repeat analyzer for microsatellite instability detection by DNA-seq
 Usage:
     msir id [--debug] [--unit-tsv=<path>] [--max-unit-len=<int>]
             [--min-rep-times=<int>] [--min-rep-len=<int>]
-            [--ex-region-len=<int>] [--processes=<int>] <bed> <fasta>
+            [--flanking-len=<int>] [--ex-region-len=<int>] [--processes=<int>]
+            <bed> <fasta>
     msir detect [--debug] [--unit-tsv=<path>] [--obs-tsv=<path>][--index-bam]
-                [--append-read-seq] [--cut-end-len=<int>] [--samtools=<path>]
+                [--append-read-seq] [--samtools=<path>]
                 [--processes=<int>] <bam>...
     msir pipeline [--debug] [--unit-tsv=<path>] [--obs-tsv=<path>]
                   [--index-bam] [--max-unit-len=<int>] [--min-rep-times=<int>]
-                  [--min-rep-len=<int>] [--ex-region-len=<int>]
-                  [--cut-end-len=<int>] [--append-read-seq] [--samtools=<path>]
-                  [--processes=<int>] <bed> <fasta> <bam>...
+                  [--min-rep-len=<int>] [--flanking-len=<int>]
+                  [--ex-region-len=<int>] [--append-read-seq]
+                  [--samtools=<path>] [--processes=<int>] <bed> <fasta>
+                  <bam>...
     msir -h|--help
     msir -v|--version
 
@@ -24,13 +26,13 @@ Options:
     --max-unit-len=<int>    Set a maximum length for repeat units [default: 8]
     --min-rep-times=<int>   Set a minimum repeat times [default: 2]
     --min-rep-len=<int>     Set a minimum length for repeats [default: 5]
+    --flanking-len=<int>    Set a flanking sequence legnth [default: 10]
     --ex-region-len=<int>   Search around extra regions [default: 20]
     --processes=<int>       Limit max cores for multiprocessing
     --unit-tsv=<path>       Set a TSV of repeat units [default: tr_unit.tsv]
     --obs-tsv=<path>        Set a TSV of observed repeats [default: tr_obs.tsv]
     --index-bam             Index BAM or CRAM if required
     --append-read-seq       Append SEQ and QUAL of SAM data into an output TSV
-    --cut-end-len=<int>     Ignore repeats on ends of reads [default: 10]
     --samtools=<path>       Set a path to samtools command
 
 Arguments:
@@ -73,6 +75,7 @@ def main():
             max_unit_len=args['--max-unit-len'],
             min_rep_times=args['--min-rep-times'],
             min_rep_len=args['--min-rep-len'],
+            flanking_len=args['--flanking-len'],
             ex_region_len=args['--ex-region-len'], n_proc=n_proc
         )
     if args['detect'] or args['pipeline']:
@@ -80,6 +83,5 @@ def main():
             bam_paths=args['<bam>'], trunit_tsv_path=args['--unit-tsv'],
             obs_tsv_path=args['--obs-tsv'], index_bam=args['--index-bam'],
             append_read_seq=args['--append-read-seq'],
-            cut_end_len=args['--cut-end-len'], samtools=args['--samtools'],
-            n_proc=n_proc
+            samtools=args['--samtools'], n_proc=n_proc
         )

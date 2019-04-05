@@ -18,21 +18,23 @@ class TandemRepeats(unittest.TestCase):
         'TTTTGCAGAGAGTACAAGAGG': {
             'repeat_unit': 'AG', 'repeat_unit_length': 2,
             'repeat_seq_length': 6, 'repeat_times': 3, 'repeat_start': 6,
-            'repeat_end': 12
+            'repeat_end': 12, 'left_seq': 'GC', 'right_seq': 'TA'
         },
         'GTTGGGAAAAAAAAAAATTG': {
             'repeat_unit': 'A', 'repeat_unit_length': 1,
             'repeat_seq_length': 11, 'repeat_times': 11, 'repeat_start': 6,
-            'repeat_end': 17
+            'repeat_end': 17, 'left_seq': 'GG', 'right_seq': 'TT'
         },
-        'TATTTTATTATTATTATTAG': {
+        'TTTTATTATTATTATTAGCG': {
             'repeat_unit': 'TTA', 'repeat_unit_length': 3,
-            'repeat_seq_length': 15, 'repeat_times': 5, 'repeat_start': 4,
-            'repeat_end': 19
+            'repeat_seq_length': 15, 'repeat_times': 5, 'repeat_start': 2,
+            'repeat_end': 17, 'left_seq': 'TT', 'right_seq': 'GC'
         }
     }
 
     def test_iterate_unique_repeat_units(self, max_unit_len=2):
+        """iterate unique repeat units
+        """
         for i in range(1, max_unit_len + 1):
             uset = set(iterate_unique_repeat_units(max_unit_len=i))
             self.assertEqual(uset, self.repeat_units[i])
@@ -41,14 +43,30 @@ class TandemRepeats(unittest.TestCase):
         """tandem repeat count from sequences
         """
         for s, d in self.reads.items():
-            df = extract_longest_repeat_df(
+            ru = d['repeat_unit']
+            df0 = extract_longest_repeat_df(
+                sequence=s,
+                regex_patterns={'patterns': {ru: compile_str_regex(ru)}},
+                flanking_len=2
+            )
+            for k, v in d.items():
+                if k not in ['left_seq', 'right_seq']:
+                    self.assertEqual(v, df0[k].iloc[0] if k in df0 else None)
+            df1 = extract_longest_repeat_df(
                 sequence=s,
                 regex_patterns={
-                    d['repeat_unit']: compile_str_regex(d['repeat_unit'])
+                    'patterns': {
+                        ru: compile_str_regex(
+                            ru, left_seq=d['left_seq'],
+                            right_seq=d['right_seq']
+                        )
+                    },
+                    'left_seq': d['left_seq'],
+                    'right_seq': d['right_seq']
                 }
             )
             for k, v in d.items():
-                self.assertEqual(v, df[k].iloc[0])
+                self.assertEqual(v, df1[k].iloc[0] if k in df1 else None)
 
 
 if __name__ == '__main__':
