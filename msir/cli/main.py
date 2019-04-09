@@ -26,7 +26,7 @@ Options:
     --max-unit-len=<int>    Set a maximum length for repeat units [default: 8]
     --min-rep-times=<int>   Set a minimum repeat times [default: 2]
     --min-rep-len=<int>     Set a minimum length for repeats [default: 5]
-    --flanking-len=<int>    Set a flanking sequence legnth [default: 10]
+    --flanking-len=<int>    Set a flanking sequence legnth [default: 5]
     --ex-region-len=<int>   Search around extra regions [default: 20]
     --processes=<int>       Limit max cores for multiprocessing
     --unit-tsv=<path>       Set a TSV of repeat units [default: tr_unit.tsv]
